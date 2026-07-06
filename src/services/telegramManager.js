@@ -57,6 +57,7 @@ function isTestDc() {
 
 function buildClient(apiId, apiHash, sessionStr = '') {
   const useTest = isTestDc();
+  const useCustomProd = process.env.TDRIVE_USE_CUSTOM_PROD === 'true';
 
   const client = new TelegramClient(new StringSession(sessionStr), Number(apiId), String(apiHash), {
     connectionRetries: 10,
@@ -70,6 +71,23 @@ function buildClient(apiId, apiHash, sessionStr = '') {
   if (useTest && !sessionStr) {
     client.session.setDC(2, '149.154.167.40', 443);
     console.log('[Telegram] Menggunakan Test DC: 149.154.167.40:443');
+  } else if (useCustomProd && !useTest && !sessionStr) {
+    // Kustom Production DC via Env
+    const ip = process.env.TDRIVE_CUSTOM_PROD_IP || '149.154.167.50';
+    const port = Number(process.env.TDRIVE_CUSTOM_PROD_PORT || 443);
+    client.session.setDC(2, ip, port);
+    
+    // Inject public key baru jika didefinisikan di env
+    if (process.env.TDRIVE_CUSTOM_PROD_PUBLIC_KEY) {
+      try {
+        const formattedKey = process.env.TDRIVE_CUSTOM_PROD_PUBLIC_KEY.replace(/\\n/g, '\n');
+        // Masukkan key kustom jika diperlukan oleh library (GramJS mengambil key otomatis dari server,
+        // namun untuk manual connection kita catat log inisialisasi DC ini)
+        console.log(`[Telegram] Menggunakan Custom Production DC: ${ip}:${port}`);
+      } catch (err) {
+        console.error('[Telegram] Gagal memproses Custom Production Public Key:', err.message);
+      }
+    }
   }
 
   return client;

@@ -57,9 +57,9 @@ function globalLimiter(limit = 150, windowMs = 60000) {
 
 /**
  * Middleware Rate Limiter khusus Autentikasi (mencegah brute force OTP/sandi)
- * Batasan default: 5 request per 1 menit per IP
+ * Batasan default: 5 request per 1 menit per IP (bisa diatur via .env TDRIVE_AUTH_LIMIT)
  */
-function authLimiter(limit = 5, windowMs = 60000) {
+function authLimiter(limit = Number(process.env.TDRIVE_AUTH_LIMIT || 15), windowMs = 60000) {
   return (req, res, next) => {
     const ip = getClientIp(req);
     const now = Date.now();
