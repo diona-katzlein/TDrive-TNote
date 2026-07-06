@@ -42,13 +42,18 @@ app.use(globalLimiter);
 app.use(express.urlencoded({ extended: true }));
 app.use(honeypot);
 
+const MySQLStore = require('express-mysql-session')(session);
+const sessionStore = new MySQLStore({}, db); // Gunakan pool koneksi MariaDB yang sudah ada
+
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(
   session({
+    key: 'tdrive_session',
     secret: process.env.SESSION_SECRET || 'tdrive-dev-secret',
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 1000 * 60 * 60 * 24 * 7 }, // 7 hari
+    cookie: { maxAge: 1000 * 60 * 60 * 24 * 30 }, // 30 hari sesi persisten
   })
 );
 
@@ -97,6 +102,9 @@ app.get('/privacy', (req, res) => {
 });
 app.get('/tos', (req, res) => {
   res.render('tos', { title: 'Ketentuan Layanan' });
+});
+app.get('/guide', (req, res) => {
+  res.render('guide', { title: 'Panduan Penggunaan' });
 });
 
 // Gerbang: semua di bawah ini wajib login via Telegram

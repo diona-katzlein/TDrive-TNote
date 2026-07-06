@@ -1,0 +1,176 @@
+<%- include('partials/header') %>
+
+<style>
+  .guide-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding-bottom: 40px;
+  }
+  .guide-page h1 {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0 0 8px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .guide-page .guide-subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 30px;
+  }
+  .guide-page .guide-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    transition: border-color 0.2s;
+  }
+  .guide-page .guide-card:hover {
+    border-color: var(--accent);
+  }
+  .guide-page .guide-card h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 14px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .guide-page .guide-card p,
+  .guide-page .guide-card li {
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--text);
+    opacity: 0.85;
+  }
+  .guide-page .guide-card ol,
+  .guide-page .guide-card ul {
+    padding-left: 20px;
+    margin: 10px 0;
+  }
+  .guide-page .guide-card li {
+    margin-bottom: 8px;
+  }
+  .guide-page .guide-card strong {
+    color: var(--text);
+    opacity: 1;
+  }
+  .guide-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: rgba(56, 139, 253, 0.15);
+    color: var(--accent);
+    border: 1px solid rgba(56, 139, 253, 0.25);
+  }
+  .guide-step {
+    background: var(--border);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+</style>
+
+<div class="guide-page">
+  <div class="page-head" style="border: none; margin-bottom: 0; padding-bottom: 0;">
+    <h1>📖 Panduan Penggunaan TDrive & TNote</h1>
+    <div class="guide-subtitle">
+      Panduan Lengkap Fitur &amp; Langkah Konfigurasi · <span class="guide-badge">Panduan Resmi</span>
+    </div>
+  </div>
+
+  <!-- Cara Masuk -->
+  <div class="guide-card">
+    <h2>🔑 1. Cara Masuk / Login Sistem</h2>
+    <p>
+      TDrive menggunakan Telegram sebagai media autentikasi. Terdapat dua metode login:
+    </p>
+    <ol>
+      <li>
+        <strong>Login Pertama Kali (Menggunakan OTP)</strong>:<br>
+        Masukkan nomor telepon Telegram Anda (dalam format internasional, misal: <code>6285xxx</code>). Telegram akan mengirimkan kode verifikasi (OTP) secara resmi ke aplikasi Telegram Anda. Masukkan kode tersebut untuk menyelesaikan login.
+      </li>
+      <li>
+        <strong>Login Berikutnya (Menggunakan Sandi / PIN Sistem)</strong>:<br>
+        Setelah berhasil login pertama kali, disarankan masuk ke menu <strong>Profil</strong> dan atur <strong>Sandi / PIN Sistem</strong> Anda. Di perangkat baru atau setelah sesi berakhir, Anda hanya perlu memasukkan nomor telepon dan Sandi/PIN tersebut tanpa perlu menunggu kode OTP lagi.
+      </li>
+    </ol>
+  </div>
+
+  <!-- Cara Membuat Channel -->
+  <div class="guide-card">
+    <h2>📢 2. Cara Membuat Channel Penyimpanan (Private Channel)</h2>
+    <p>
+      Secara default, berkas Anda akan diunggah ke <strong>Saved Messages</strong> (Pesan Tersimpan) Anda sendiri. Jika ingin memisahkannya ke channel privat khusus:
+    </p>
+    <ol>
+      <li>Buka menu <strong>Profil</strong> di bagian bawah navigasi utama.</li>
+      <li>Cari kolom <strong>Buat Private Channel Baru</strong>.</li>
+      <li>Masukkan nama saluran penyimpanan baru (misal: <code>Backup Film</code> atau <code>Berkas TDrive</code>), lalu klik tombol <strong>Buat Private Channel &amp; Set Target</strong>.</li>
+      <li>Sistem TDrive akan membuat saluran privat tersebut secara otomatis dan langsung memasangnya sebagai target penyimpanan utama.</li>
+    </ol>
+    <p style="margin-top: 10px; background: rgba(56,139,253,0.1); padding: 10px; border-radius: 8px; border-left: 4px solid var(--accent); font-size: 13px;">
+      💡 <strong>Limit Saluran Buatan:</strong> Akun tipe <strong>Free</strong> dibatasi maksimal membuat 10 private channel, sedangkan akun tipe <strong>Premium</strong> dapat membuat hingga 500 private channel.
+    </p>
+  </div>
+
+  <!-- Memilih Target Penyimpanan -->
+  <div class="guide-card">
+    <h2>🎯 3. Memilih Target Penyimpanan Saat Unggah</h2>
+    <p>
+      Anda dapat menentukan ke mana berkas atau catatan akan diunggah secara instan:
+    </p>
+    <ul>
+      <li>
+        <strong>Pilihan Dropdown Drive &amp; TNote</strong>:<br>
+        Di halaman Drive atau halaman Catatan (TNote), terdapat dropdown pilihan target penyimpanan. Anda dapat memilih apakah berkas/catatan tersebut akan diunggah ke <code>Saved Messages (me)</code>, channel default yang pertama kali dibuat, atau ke salah satu channel privat buatan Anda lainnya.
+      </li>
+      <li>
+        <strong>Target Default Utama</strong>:<br>
+        Anda dapat mengubah target penyimpanan default global di menu <strong>Profil</strong> pada bagian <em>Storage Peer Selector</em>.
+      </li>
+    </ul>
+  </div>
+
+  <!-- Cara Unggah File Besar -->
+  <div class="guide-card">
+    <h2>🚀 4. Mengunggah File Besar &amp; Bypass Batasan Cloudflare</h2>
+    <p>
+      TDrive mendukung pengunggahan file berukuran besar. Untuk file berukuran di atas <strong>50 MB</strong>:
+    </p>
+    <ul>
+      <li>Aplikasi secara otomatis menggunakan metode <strong>Client-Side Chunking</strong>, yaitu membagi file besar menjadi potongan-potongan kecil masing-masing 50 MB langsung di browser Anda.</li>
+      <li>Metode ini berhasil melewati batasan payload unggahan Cloudflare (yang biasanya dibatasi 100 MB).</li>
+      <li>Saat proses pengunggahan selesai, server TDrive akan merakit kembali potongan file tersebut secara transparan dan menyimpannya dengan aman di Telegram Anda.</li>
+    </ul>
+  </div>
+
+  <!-- Keamanan 2FA -->
+  <div class="guide-card">
+    <h2>🔒 5. Mengaktifkan Autentikasi Dua Faktor (MFA / 2FA)</h2>
+    <p>Untuk mengamankan akun Anda dari akses pihak lain:</p>
+    <ol>
+      <li>Buka menu <strong>Profil</strong> Anda.</li>
+      <li>Cari kartu <strong>Autentikasi Dua Faktor (MFA / 2FA)</strong>, klik tombol <strong>Konfigurasi 2FA</strong>.</li>
+      <li>Pindai kode QR yang muncul menggunakan aplikasi authenticator Anda (seperti Google Authenticator atau Aegis).</li>
+      <li>Masukkan kode 6 digit yang dihasilkan aplikasi untuk verifikasi dan mengaktifkannya.</li>
+    </ol>
+  </div>
+
+  <div style="text-align: center; margin-top: 30px; font-size: 14px;">
+    <a href="/" class="btn" style="padding: 10px 24px;">Kembali ke Halaman Utama</a>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

@@ -15,7 +15,21 @@ const db = require('../db');
  */
 async function log(req, action, details) {
   const userPhone = (req && req.session && req.session.userPhone) ? req.session.userPhone : 'Public/System';
-  const ipAddress = req ? (req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1') : '127.0.0.1';
+  let ipAddress = '127.0.0.1';
+  if (req) {
+    // Cari real IP client di Cloudflare header dulu, lalu x-forwarded-for, baru fallback ke req.ip
+    const cfIp = req.headers['cf-connecting-ip'];
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    
+    if (cfIp) {
+      ipAddress = cfIp;
+    } else if (xForwardedFor) {
+      // x-forwarded-for bisa berisi "client, proxy1, proxy2". Kita ambil elemen pertama.
+      ipAddress = xForwardedFor.split(',')[0].trim();
+    } else {
+      ipAddress = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    }
+  }
   const timestamp = Date.now();
   
   try {
