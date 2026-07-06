@@ -87,13 +87,13 @@ async function createFolder(accountId, parentId, name) {
 async function listFolders(accountId, parentId) {
   if (parentId === null || parentId === undefined) {
     const [rows] = await db.query(
-      'SELECT * FROM folders WHERE account_id = ? AND parent_id IS NULL ORDER BY name ASC',
+      'SELECT * FROM folders WHERE account_id = ? AND parent_id IS NULL AND deleted_at IS NULL ORDER BY name ASC',
       [accountId]
     );
     return rows;
   } else {
     const [rows] = await db.query(
-      'SELECT * FROM folders WHERE account_id = ? AND parent_id = ? ORDER BY name ASC',
+      'SELECT * FROM folders WHERE account_id = ? AND parent_id = ? AND deleted_at IS NULL ORDER BY name ASC',
       [accountId, parentId]
     );
     return rows;
@@ -110,10 +110,10 @@ async function getFolderByUuid(uuid) {
   return rows[0] || null;
 }
 
-/** Semua folder pada satu akun (untuk dropdown "pindahkan ke"). */
+/** Semua folder pada satu akun (untuk dropdown "pindahkan ke" - mengecualikan yang di tempat sampah). */
 async function listAllFolders(accountId) {
   const [rows] = await db.query(
-    'SELECT id, uuid, parent_id, name FROM folders WHERE account_id = ? ORDER BY name ASC',
+    'SELECT id, uuid, parent_id, name FROM folders WHERE account_id = ? AND deleted_at IS NULL ORDER BY name ASC',
     [accountId]
   );
   return rows;
@@ -194,13 +194,13 @@ async function getFileChunks(fileId) {
 async function listFiles(accountId, folderId) {
   if (folderId === null || folderId === undefined) {
     const [rows] = await db.query(
-      'SELECT * FROM files WHERE account_id = ? AND folder_id IS NULL ORDER BY name ASC',
+      'SELECT * FROM files WHERE account_id = ? AND folder_id IS NULL AND deleted_at IS NULL AND parent_file_id IS NULL ORDER BY name ASC',
       [accountId]
     );
     return rows;
   } else {
     const [rows] = await db.query(
-      'SELECT * FROM files WHERE account_id = ? AND folder_id = ? ORDER BY name ASC',
+      'SELECT * FROM files WHERE account_id = ? AND folder_id = ? AND deleted_at IS NULL AND parent_file_id IS NULL ORDER BY name ASC',
       [accountId, folderId]
     );
     return rows;
@@ -209,7 +209,7 @@ async function listFiles(accountId, folderId) {
 
 async function searchFiles(accountId, query) {
   const [rows] = await db.query(
-    'SELECT * FROM files WHERE account_id = ? AND name LIKE ? ORDER BY name ASC LIMIT 200',
+    'SELECT * FROM files WHERE account_id = ? AND name LIKE ? AND deleted_at IS NULL AND parent_file_id IS NULL ORDER BY name ASC LIMIT 200',
     [accountId, `%${query}%`]
   );
   return rows;
@@ -230,10 +230,60 @@ async function deleteFile(id) {
 /** Statistik agregat per akun (jumlah file & total byte) untuk dashboard. */
 async function accountStats(accountId) {
   const [rows] = await db.query(
-    'SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS total FROM files WHERE account_id = ?',
+    'SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS total FROM files WHERE account_id = ? AND deleted_at IS NULL AND parent_file_id IS NULL',
     [accountId]
   );
   return rows[0] || { count: 0, total: 0 };
+}
+
+// ---------- Recycle Bin / Trash & Versioning ----------
+
+async function listTrashFolders(accountId) {
+  const [rows] = await db.query(
+    'SELECT * FROM folders WHERE account_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC',
+    [accountId]
+  );
+  return rows;
+}
+
+async function listTrashFiles(accountId) {
+  const [rows] = await db.query(
+    'SELECT * FROM files WHERE account_id = ? AND deleted_at IS NOT NULL AND parent_file_id IS NULL ORDER BY deleted_at DESC',
+    [accountId]
+  );
+  return rows;
+}
+
+async function softDeleteFolder(id) {
+  return db.query('UPDATE folders SET deleted_at = ? WHERE id = ?', [now(), id]);
+}
+
+async function softDeleteFile(id) {
+  return db.query('UPDATE files SET deleted_at = ? WHERE id = ?', [now(), id]);
+}
+
+async function restoreFolder(id) {
+  return db.query('UPDATE folders SET deleted_at = NULL WHERE id = ?', [id]);
+}
+
+async function restoreFile(id) {
+  return db.query('UPDATE files SET deleted_at = NULL WHERE id = ?', [id]);
+}
+
+async function getFileVersions(fileId) {
+  const [rows] = await db.query(
+    'SELECT * FROM files WHERE parent_file_id = ? ORDER BY created_at DESC',
+    [fileId]
+  );
+  return rows;
+}
+
+async function findActiveFileByName(accountId, folderId, name) {
+  const [rows] = await db.query(
+    'SELECT * FROM files WHERE account_id = ? AND folder_id ' + (folderId ? '= ?' : 'IS NULL') + ' AND name = ? AND deleted_at IS NULL AND parent_file_id IS NULL',
+    folderId ? [accountId, folderId, name] : [accountId, name]
+  );
+  return rows[0] || null;
 }
 
 module.exports = {
@@ -267,4 +317,13 @@ module.exports = {
   moveFile,
   deleteFile,
   accountStats,
+  // Recycle Bin & Versioning
+  listTrashFolders,
+  listTrashFiles,
+  softDeleteFolder,
+  softDeleteFile,
+  restoreFolder,
+  restoreFile,
+  getFileVersions,
+  findActiveFileByName,
 };

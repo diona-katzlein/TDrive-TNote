@@ -14,7 +14,27 @@ router.use(requireAdmin);
 // Daftar akun (drive) - Hanya Admin
 router.get('/', async (req, res) => {
   try {
-    res.render('accounts/list', { title: 'Accounts', error: null, csrfToken: res.locals.csrfToken });
+    const rawAccounts = await fileService.listAccounts();
+    const accounts = [];
+    for (const a of rawAccounts) {
+      const stats = await fileService.accountStats(a.id);
+      const [channelRows] = await db.query('SELECT COUNT(*) AS count FROM user_channels WHERE account_id = ?', [a.id]);
+      const channelCount = channelRows[0].count;
+
+      accounts.push({
+        ...a,
+        storageUsed: stats.total,
+        fileCount: stats.count,
+        channelCount,
+      });
+    }
+
+    res.render('accounts/list', {
+      title: 'Accounts',
+      accounts,
+      error: null,
+      csrfToken: res.locals.csrfToken
+    });
   } catch (err) {
     res.status(500).send('Terjadi kesalahan: ' + err.message);
   }

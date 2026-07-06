@@ -12,9 +12,8 @@ const storageService = require('../services/storageService');
 const auditService = require('../services/auditService');
 const { requireActiveAccount } = require('../middleware/activeAccount');
 
-// Direktori temp untuk upload (streaming ke disk, bukan memori).
 const TMP_DIR = path.join(process.cwd(), 'data', 'tmp');
-const MAX_UPLOAD_MB = Number(process.env.TDRIVE_MAX_UPLOAD_MB) || 10240; // default 10 GB
+const MAX_UPLOAD_MB = Number(process.env.TDRIVE_MAX_UPLOAD_MB) || 10240; // 10 GB
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -29,8 +28,12 @@ const upload = multer({ storage, limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024
 
 router.use(requireActiveAccount);
 
+// Pengalihan otomatis /drive/folder ke /drive/
+router.get('/folder', (req, res) => res.redirect('/drive'));
+router.get('/folder/', (req, res) => res.redirect('/drive'));
+
 /**
- * Helper untuk merender halaman browser file/folder
+ * Helper render browser file
  */
 async function renderBrowser(req, res, folderUuid = null) {
   try {
@@ -41,7 +44,7 @@ async function renderBrowser(req, res, folderUuid = null) {
     let folderId = null;
     if (folderUuid) {
       currentFolder = await fileService.getFolderByUuid(folderUuid);
-      if (!currentFolder || currentFolder.account_id !== accountId) {
+      if (!currentFolder || currentFolder.account_id !== accountId || currentFolder.deleted_at !== null) {
         return res.status(404).send('Folder tidak ditemukan.');
       }
       folderId = currentFolder.id;
@@ -52,7 +55,7 @@ async function renderBrowser(req, res, folderUuid = null) {
       ? await fileService.searchFiles(accountId, q)
       : await fileService.listFiles(accountId, folderId);
 
-    // Ambil daftar share aktif untuk akun ini agar bisa dirender di UI
+    // Ambil daftar share aktif
     const [shares] = await db.query(
       `SELECT s.uuid, s.item_type, s.item_id 
        FROM shares s
@@ -87,13 +90,10 @@ async function renderBrowser(req, res, folderUuid = null) {
   }
 }
 
-// Browse Root Drive
 router.get('/', (req, res) => renderBrowser(req, res, null));
-
-// Browse Subfolder Drive (IDOR-safe menggunakan UUID)
 router.get('/folder/:uuid', (req, res) => renderBrowser(req, res, req.params.uuid));
 
-// Upload File (streaming dari disk, chunking otomatis untuk file besar)
+// Upload File (dengan penanganan Versi Berkas jika nama duplikat)
 router.post('/upload', upload.single('file'), async (req, res) => {
   const folderUuid = req.body.folder_uuid || null;
   const tempPath = req.file && req.file.path;
@@ -110,6 +110,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       folderId = folder.id;
     }
 
+    // Periksa apakah berkas dengan nama yang sama sudah ada di direktori tersebut
+    const existingFile = await fileService.findActiveFileByName(req.activeAccount.id, folderId, req.file.originalname);
+
     const uploadedFile = await storageService.uploadFile(req.activeAccount, {
       tempPath,
       filename: req.file.originalname,
@@ -118,7 +121,14 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       folderId,
     });
 
-    await auditService.log(req, 'UPLOAD_FILE', `Mengunggah berkas: ${req.file.originalname} (${req.file.size} bytes, File UUID: ${uploadedFile.uuid})`);
+    // Jika sudah ada berkas bernama sama, jadikan yang lama sebagai versi riwayat
+    if (existingFile) {
+      await db.query('UPDATE files SET parent_file_id = ?, folder_id = NULL WHERE id = ?', [uploadedFile.id, existingFile.id]);
+      await db.query('UPDATE files SET parent_file_id = ? WHERE parent_file_id = ? AND id != ?', [uploadedFile.id, existingFile.id, uploadedFile.id]);
+      await auditService.log(req, 'VERSION_CREATE', `Mengarsipkan versi lama berkas "${req.file.originalname}" (ID: ${existingFile.id}) menjadi riwayat dari berkas baru (ID: ${uploadedFile.id})`);
+    }
+
+    await auditService.log(req, 'UPLOAD_FILE', `Mengunggah berkas: ${req.file.originalname} (${req.file.size} bytes, UUID: ${uploadedFile.uuid})`);
 
     const redirectPath = folderUuid ? `/drive/folder/${folderUuid}` : '/drive';
     res.redirect(redirectPath);
@@ -130,7 +140,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// Download File (IDOR-safe menggunakan UUID)
+// Download File
 router.get('/file/:uuid/download', async (req, res) => {
   try {
     const file = await fileService.getFileByUuid(req.params.uuid);
@@ -143,7 +153,6 @@ router.get('/file/:uuid/download', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
     
     await auditService.log(req, 'DOWNLOAD_FILE', `Mengunduh berkas: ${file.name} (UUID: ${file.uuid})`);
-    
     await storageService.downloadToStream(req.activeAccount, file, res);
     res.end();
   } catch (err) {
@@ -155,7 +164,32 @@ router.get('/file/:uuid/download', async (req, res) => {
   }
 });
 
-// Rename File (IDOR-safe menggunakan UUID)
+// In-Browser Media Preview & Streaming (Image, PDF, Video, Audio)
+router.get('/file/:uuid/preview', async (req, res) => {
+  try {
+    const file = await fileService.getFileByUuid(req.params.uuid);
+    if (!file || file.account_id !== req.activeAccount.id) {
+      return res.status(404).send('File tidak ditemukan.');
+    }
+
+    res.setHeader('Content-Type', file.mime || 'application/octet-stream');
+    res.setHeader('Content-Length', file.size);
+    res.setHeader('Accept-Ranges', 'none');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
+    
+    await auditService.log(req, 'PREVIEW_FILE', `Melakukan preview berkas media: ${file.name} (UUID: ${file.uuid})`);
+    await storageService.downloadToStream(req.activeAccount, file, res);
+    res.end();
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).send('Preview gagal: ' + err.message);
+    } else {
+      res.destroy(err);
+    }
+  }
+});
+
+// Rename File
 router.post('/file/:uuid/rename', async (req, res) => {
   const { uuid } = req.params;
   const newName = (req.body.name || '').trim();
@@ -168,7 +202,6 @@ router.post('/file/:uuid/rename', async (req, res) => {
 
     const oldName = file.name;
     await fileService.renameFile(file.id, newName);
-
     await auditService.log(req, 'RENAME_FILE', `Mengubah nama berkas dari "${oldName}" menjadi "${newName}" (UUID: ${file.uuid})`);
 
     let redirectPath = '/drive';
@@ -182,7 +215,7 @@ router.post('/file/:uuid/rename', async (req, res) => {
   }
 });
 
-// Pindahkan File ke Folder lain (IDOR-safe menggunakan UUID)
+// Pindahkan File
 router.post('/file/:uuid/move', async (req, res) => {
   const { uuid } = req.params;
   const targetFolderUuid = req.body.folder_uuid || null;
@@ -206,7 +239,6 @@ router.post('/file/:uuid/move', async (req, res) => {
     }
 
     await fileService.moveFile(file.id, targetFolderId);
-
     await auditService.log(req, 'MOVE_FILE', `Memindahkan berkas "${file.name}" ke folder "${targetFolderName}" (File UUID: ${file.uuid})`);
 
     const back = currentFolderUuid ? `/drive/folder/${currentFolderUuid}` : '/drive';
@@ -216,7 +248,7 @@ router.post('/file/:uuid/move', async (req, res) => {
   }
 });
 
-// Verifikasi Integritas File (IDOR-safe menggunakan UUID)
+// Verifikasi Integritas File
 router.get('/file/:uuid/verify', async (req, res) => {
   let file;
   try {
@@ -244,7 +276,6 @@ router.get('/file/:uuid/verify', async (req, res) => {
       : `"${file.name}": tidak ada checksum tersimpan.`;
     
     await auditService.log(req, 'VERIFY_FILE', `Verifikasi integritas file "${file.name}": ${r.ok ? 'SUCCESS' : 'FAILED'} (File UUID: ${file.uuid})`);
-
     const key = r.ok ? 'notice' : 'error';
     res.redirect(`${back}${back.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(msg)}`);
   } catch (err) {
@@ -252,22 +283,13 @@ router.get('/file/:uuid/verify', async (req, res) => {
   }
 });
 
-// Hapus File (IDOR-safe menggunakan UUID)
+// Soft Delete File (Masuk Keranjang Sampah)
 router.post('/file/:uuid/delete', async (req, res) => {
   try {
     const file = await fileService.getFileByUuid(req.params.uuid);
     if (file && file.account_id === req.activeAccount.id) {
-      try {
-        await storageService.deleteRemote(req.activeAccount, file);
-      } catch (_) {
-        /* abaikan error remote */
-      }
-      
-      // Hapus share link terkait berkas
-      await db.query("DELETE FROM shares WHERE item_type = 'file' AND item_id = ?", [file.id]);
-      
-      await fileService.deleteFile(file.id);
-      await auditService.log(req, 'DELETE_FILE', `Menghapus berkas: ${file.name} (UUID: ${file.uuid})`);
+      await fileService.softDeleteFile(file.id);
+      await auditService.log(req, 'DELETE_FILE_SOFT', `Memindahkan berkas ke keranjang sampah: ${file.name} (UUID: ${file.uuid})`);
     }
 
     let redirectPath = '/drive';
@@ -278,6 +300,146 @@ router.post('/file/:uuid/delete', async (req, res) => {
     res.redirect(redirectPath);
   } catch (err) {
     res.status(500).send('Gagal menghapus file: ' + err.message);
+  }
+});
+
+// ----------------------------------------------------
+// MANAJEMEN SAMPAH (RECYCLE BIN)
+// ----------------------------------------------------
+
+router.get('/trash', async (req, res) => {
+  try {
+    const accountId = req.activeAccount.id;
+    const folders = await fileService.listTrashFolders(accountId);
+    const files = await fileService.listTrashFiles(accountId);
+
+    res.render('files/trash', {
+      title: 'Keranjang Sampah',
+      folders,
+      files,
+      notice: req.query.notice || null,
+      error: req.query.error || null,
+      csrfToken: res.locals.csrfToken,
+    });
+  } catch (err) {
+    res.status(500).send('Gagal memuat tempat sampah: ' + err.message);
+  }
+});
+
+// Pulihkan Berkas
+router.post('/file/:uuid/restore', async (req, res) => {
+  try {
+    const file = await fileService.getFileByUuid(req.params.uuid);
+    if (!file || file.account_id !== req.activeAccount.id) {
+      throw new Error('Berkas tidak ditemukan.');
+    }
+    await fileService.restoreFile(file.id);
+    await auditService.log(req, 'RESTORE_FILE', `Memulihkan berkas "${file.name}" dari tempat sampah.`);
+    res.redirect('/drive/trash?notice=' + encodeURIComponent('Berkas berhasil dipulihkan.'));
+  } catch (err) {
+    res.redirect('/drive/trash?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// Hapus Berkas Permanen
+router.post('/file/:uuid/delete-permanent', async (req, res) => {
+  try {
+    const file = await fileService.getFileByUuid(req.params.uuid);
+    if (!file || file.account_id !== req.activeAccount.id) {
+      throw new Error('Berkas tidak ditemukan.');
+    }
+    
+    // Hapus di Telegram remote (best effort)
+    try {
+      await storageService.deleteRemote(req.activeAccount, file);
+    } catch (_) {}
+
+    // Hapus shares link
+    await db.query("DELETE FROM shares WHERE item_type = 'file' AND item_id = ?", [file.id]);
+    
+    // Hapus dari database
+    await fileService.deleteFile(file.id);
+    await auditService.log(req, 'DELETE_FILE_PERMANENT', `Menghapus berkas secara permanen: ${file.name} (UUID: ${file.uuid})`);
+    
+    res.redirect('/drive/trash?notice=' + encodeURIComponent('Berkas dihapus secara permanen.'));
+  } catch (err) {
+    res.redirect('/drive/trash?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// Kosongkan Tempat Sampah
+router.post('/trash/empty', async (req, res) => {
+  try {
+    const accountId = req.activeAccount.id;
+    
+    // Ambil berkas-berkas terhapus
+    const files = await fileService.listTrashFiles(accountId);
+    for (const file of files) {
+      try {
+        await storageService.deleteRemote(req.activeAccount, file);
+      } catch (_) {}
+      await db.query("DELETE FROM shares WHERE item_type = 'file' AND item_id = ?", [file.id]);
+      await fileService.deleteFile(file.id);
+    }
+
+    // Ambil folder-folder terhapus dan hapus records
+    const folders = await fileService.listTrashFolders(accountId);
+    for (const f of folders) {
+      await db.query("DELETE FROM shares WHERE item_type = 'folder' AND item_id = ?", [f.id]);
+      await fileService.deleteFolder(f.id);
+    }
+
+    await auditService.log(req, 'EMPTY_TRASH', 'Mengosongkan tempat sampah secara permanen.');
+    res.redirect('/drive/trash?notice=' + encodeURIComponent('Tempat sampah berhasil dikosongkan.'));
+  } catch (err) {
+    res.redirect('/drive/trash?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// ----------------------------------------------------
+// RIWAYAT VERSI BERKAS (VERSIONING)
+// ----------------------------------------------------
+
+router.get('/file/:uuid/versions', async (req, res) => {
+  try {
+    const file = await fileService.getFileByUuid(req.params.uuid);
+    if (!file || file.account_id !== req.activeAccount.id) {
+      return res.status(404).send('Berkas tidak ditemukan.');
+    }
+
+    const versions = await fileService.getFileVersions(file.id);
+
+    res.render('files/versions', {
+      title: 'Riwayat Versi: ' + file.name,
+      file,
+      versions,
+      csrfToken: res.locals.csrfToken,
+    });
+  } catch (err) {
+    res.status(500).send('Gagal memuat riwayat versi: ' + err.message);
+  }
+});
+
+// Pulihkan Versi Lama Menjadi Aktif
+router.post('/file/:uuid/versions/:version_uuid/restore', async (req, res) => {
+  try {
+    const activeFile = await fileService.getFileByUuid(req.params.uuid);
+    const versionToRestore = await fileService.getFileByUuid(req.params.version_uuid);
+    
+    if (!activeFile || !versionToRestore || activeFile.account_id !== req.activeAccount.id) {
+      throw new Error('Berkas atau versi tidak ditemukan.');
+    }
+
+    // Lakukan swapping relasi agar versi lama menjadi active (parent_file_id = NULL)
+    // dan activeFile saat ini terdorong menjadi versi riwayat dari berkas tersebut
+    await db.query('UPDATE files SET parent_file_id = ?, folder_id = NULL WHERE id = ?', [versionToRestore.id, activeFile.id]);
+    await db.query('UPDATE files SET parent_file_id = NULL, folder_id = ? WHERE id = ?', [activeFile.folder_id, versionToRestore.id]);
+    await db.query('UPDATE files SET parent_file_id = ? WHERE parent_file_id = ? AND id != ?', [versionToRestore.id, activeFile.id, versionToRestore.id]);
+
+    await auditService.log(req, 'RESTORE_VERSION', `Memulihkan berkas versi lama (ID: ${versionToRestore.id}) menjadi aktif menggantikan berkas (ID: ${activeFile.id}).`);
+    res.redirect(`/drive/file/${versionToRestore.uuid}/versions`);
+  } catch (err) {
+    res.redirect('/drive?error=' + encodeURIComponent(err.message));
   }
 });
 

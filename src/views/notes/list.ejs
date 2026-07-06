@@ -243,12 +243,12 @@
 
 <div class="page-head">
   <div class="breadcrumb">📝 TNote <span class="hint">— catatan E2E cloud</span></div>
-  <form method="GET" action="/notes" class="search">
-    <input type="text" name="q" value="<%= query %>" placeholder="Cari catatan..." />
+  <form method="GET" action="/notes" class="search" onsubmit="event.preventDefault(); performClientSearch(document.getElementById('clientSearchInput').value); return false;">
+    <input type="text" id="clientSearchInput" name="q" value="<%= query %>" placeholder="Cari catatan..." oninput="performClientSearch(this.value)" />
     <% if (activeCategory) { %>
       <input type="hidden" name="category" value="<%= activeCategory %>" />
     <% } %>
-    <button class="btn small ghost">Cari</button>
+    <button class="btn small ghost" type="submit">Cari</button>
   </form>
 </div>
 
@@ -324,6 +324,8 @@
                 <% } else { %>
                   <button type="button" class="btn small ghost" style="padding: 4px 10px; font-size: 12px;" onclick="openShareNoteModal('<%= n.uuid %>', '<%= n.title.replace(/'/g, '\\\'') %>')">🔗 Bagikan</button>
                 <% } %>
+
+                <button type="button" class="btn small ghost" style="padding: 4px 10px; font-size: 12px;" onclick="openWorkspaceModal('note', '<%= n.uuid %>', '<%= n.title.replace(/'/g, '\\\'') %>')">👥 Kolaborasi</button>
 
                 <a class="btn small ghost" href="/notes/<%= n.uuid %>" style="padding: 4px 10px; font-size: 12px;">Edit</a>
                 <form method="POST" action="/notes/<%= n.uuid %>/delete" onsubmit="return confirm('Hapus catatan ini?');" style="margin: 0;">
@@ -413,6 +415,41 @@
       </div>
     </div>
   </div>
+<!-- ---------------------------------------------------- -->
+<!-- MODAL: KELOLA WORKSPACE KOLABORASI -->
+<!-- ---------------------------------------------------- -->
+<div id="workspaceModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>👥 Undang Kolaborator</h3>
+      <button class="modal-close" onclick="closeWorkspaceModal()">&times;</button>
+    </div>
+    <form method="POST" action="/workspace/share-workspace" class="form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" name="redirect" id="workspaceRedirect" />
+      <input type="hidden" name="item_type" id="workspaceItemType" />
+      <input type="hidden" name="item_uuid" id="workspaceItemUuid" />
+      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+
+      <p class="hint" style="margin-top: 0;">Mengundang untuk: <strong id="workspaceItemName" style="color: var(--text);">Catatan</strong></p>
+
+      <label>Nomor Telepon Rekan (Format Internasional)
+        <input type="text" name="target_phone" placeholder="Mis. +62812345678" required />
+      </label>
+
+      <label>Hak Akses
+        <select name="permission">
+          <option value="read">Baca Saja (Read)</option>
+          <option value="write">Tulis &amp; Baca (Write)</option>
+        </select>
+      </label>
+
+      <div style="margin-top: 15px; display: flex; gap: 10px;">
+        <button class="btn" type="submit" style="flex: 1;">Undang</button>
+        <button class="btn ghost" type="button" onclick="closeWorkspaceModal()">Batal</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script>
@@ -460,6 +497,59 @@
     input.select();
     document.execCommand('copy');
     alert('Tautan berhasil disalin ke clipboard!');
+  }
+
+  // --- LOGIKA WORKSPACE MODAL ---
+  function openWorkspaceModal(type, uuid, name) {
+    document.getElementById('workspaceItemType').value = type;
+    document.getElementById('workspaceItemUuid').value = uuid;
+    document.getElementById('workspaceItemName').innerText = name;
+    document.getElementById('workspaceRedirect').value = currentUrl;
+    document.getElementById('workspaceModal').style.display = 'flex';
+  }
+
+  function closeWorkspaceModal() {
+    document.getElementById('workspaceModal').style.display = 'none';
+  }
+
+  // --- LOGIKA PENCARIAN CLIENT-SIDE (ZERO-KNOWLEDGE) ---
+  function performClientSearch(queryText) {
+    var q = queryText.toLowerCase().trim();
+    var cards = document.querySelectorAll('.note-card-custom');
+    var matchCount = 0;
+
+    cards.forEach(function(card) {
+      var title = card.querySelector('h3').innerText.toLowerCase();
+      var snippet = card.querySelector('.note-snippet').innerText.toLowerCase();
+      var category = card.querySelector('.note-cat-tag').innerText.toLowerCase();
+
+      if (title.includes(q) || snippet.includes(q) || category.includes(q)) {
+        card.style.display = 'flex';
+        matchCount++;
+      } else {
+        card.style.display = 'none';
+      }
+    });
+
+    // Tampilkan/sembunyikan notice jika tidak ada hasil
+    var emptyDiv = document.querySelector('.empty.card');
+    if (cards.length > 0) {
+      if (matchCount === 0) {
+        if (!emptyDiv) {
+          var container = document.querySelector('.note-grid-custom');
+          var notice = document.createElement('div');
+          notice.className = 'empty-search-notice hint';
+          notice.style.textAlign = 'center';
+          notice.style.padding = '40px';
+          notice.style.width = '100%';
+          notice.innerText = 'Tidak ada catatan yang cocok dengan pencarian Anda.';
+          container.appendChild(notice);
+        }
+      } else {
+        var existingNotice = document.querySelector('.empty-search-notice');
+        if (existingNotice) existingNotice.remove();
+      }
+    }
   }
 </script>
 

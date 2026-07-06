@@ -1,0 +1,52 @@
+<%- include('../partials/header') %>
+
+<div class="page-head">
+  <div class="breadcrumb">🕒 Riwayat Versi: <strong><%= file.name %></strong></div>
+  <a class="btn ghost small" href="/drive">⬅ Kembali ke Drive</a>
+</div>
+
+<p class="hint">Unggahan berkas baru dengan nama yang sama otomatis membuat arsip versi lama di bawah ini. Anda dapat mengunduh versi lama atau memulihkannya kembali menjadi versi aktif utama.</p>
+
+<table class="grid" style="margin-top: 15px;">
+  <thead>
+    <tr><th>Versi</th><th>Nama</th><th>Ukuran</th><th>Tipe</th><th>Tanggal Unggah</th><th>Aksi</th></tr>
+  </thead>
+  <tbody>
+    <!-- Active Version -->
+    <tr style="background: rgba(46, 166, 255, 0.08); border-left: 4px solid var(--accent);">
+      <td><span class="tag" style="background: var(--accent); color: #fff; font-size: 11px;">Aktif (Terbaru)</span></td>
+      <td><strong><%= file.name %></strong></td>
+      <td><%= formatSize(file.size) %></td>
+      <td><%= file.mime || '-' %></td>
+      <td><%= formatDate(file.created_at) %></td>
+      <td class="actions">
+        <a class="btn small" href="/drive/file/<%= file.uuid %>/download">Unduh</a>
+      </td>
+    </tr>
+
+    <!-- Historical Versions -->
+    <% versions.forEach(function(v, idx) { %>
+      <tr>
+        <td>Versi <%= versions.length - idx %></td>
+        <td><%= v.name %></td>
+        <td><%= formatSize(v.size) %></td>
+        <td><%= v.mime || '-' %></td>
+        <td><%= formatDate(v.created_at) %></td>
+        <td class="actions">
+          <a class="btn small ghost" href="/drive/file/<%= v.uuid %>/download">Unduh</a>
+          
+          <form method="POST" action="/drive/file/<%= file.uuid %>/versions/<%= v.uuid %>/restore" onsubmit="return confirm('Kembalikan versi ini menjadi berkas aktif utama? Berkas aktif saat ini akan diarsipkan sebagai versi riwayat.');" class="inline" style="margin:0;">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <button class="btn small">Pulihkan Versi Ini</button>
+          </form>
+        </td>
+      </tr>
+    <% }); %>
+
+    <% if (!versions.length) { %>
+      <tr><td colspan="6" class="empty-row" style="text-align: center; color: var(--muted); font-size: 13px;">Tidak ada riwayat versi sebelumnya untuk berkas ini.</td></tr>
+    <% } %>
+  </tbody>
+</table>
+
+<%- include('../partials/footer') %>

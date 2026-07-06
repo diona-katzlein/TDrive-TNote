@@ -1,5 +1,34 @@
 <%- include('partials/header') %>
 
+<style>
+  .profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 768px) {
+    .profile-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .channel-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  .hp-field {
+    display: none !important;
+  }
+</style>
+
 <div class="page-head">
   <div class="breadcrumb">👤 Profil Saya</div>
 </div>
@@ -7,7 +36,7 @@
 <% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
 <% if (error) { %><div class="alert error"><%= error %></div><% } %>
 
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
+<div class="profile-grid">
   <!-- Informasi Akun -->
   <div class="card">
     <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Informasi Pengguna</h2>
@@ -15,6 +44,16 @@
       <div>
         <span class="hint">Nomor Telepon Telegram</span>
         <div style="font-size: 18px; font-weight: 700; margin-top: 4px;"><%= phone %></div>
+      </div>
+      <div>
+        <span class="hint">Tipe Akun</span>
+        <div style="margin-top: 4px;">
+          <% if (account && account.user_type === 'Premium') { %>
+            <span class="tag" style="background: var(--accent); color: #fff; font-weight: 700; padding: 4px 10px; border-radius: 20px; font-size: 12px;">🌟 Premium User</span>
+          <% } else { %>
+            <span class="tag" style="background: var(--panel-2); border: 1px solid var(--border); color: var(--text); font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 12px;">Free User</span>
+          <% } %>
+        </div>
       </div>
       <div>
         <span class="hint">Tingkat Akses</span>
@@ -43,32 +82,130 @@
     </div>
   </div>
 
-  <!-- Pengaturan Password/PIN -->
-  <div class="card">
-    <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Sandi / PIN Masuk Sistem</h2>
-    <p class="hint">Buat sandi atau PIN sistem agar ketika Anda membuka TDrive dari perangkat/browser lain, Anda cukup mengetikkan sandi ini tanpa perlu meminta OTP Telegram lagi.</p>
-    
-    <form method="POST" action="/profile/password" class="form" style="margin-top: 15px;">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-      <label>Kata Sandi / PIN Baru
-        <input type="password" name="password" required placeholder="Masukkan kata sandi baru" />
-      </label>
-      <label>Konfirmasi Kata Sandi
-        <input type="password" name="confirm_password" required placeholder="Ketik ulang kata sandi baru" />
-      </label>
-      <button class="btn" type="submit">Simpan Kata Sandi</button>
-    </form>
-    
-    <% if (account && account.password_hash) { %>
-      <div style="margin-top: 15px; text-align: center; color: var(--ok); font-size: 13px; font-weight: 600;">
-        ✓ Akun Anda telah dilindungi dengan Sandi/PIN Masuk.
-      </div>
-    <% } else { %>
-      <div style="margin-top: 15px; text-align: center; color: var(--muted); font-size: 13px;">
-        ⚠ Anda belum mengatur sandi masuk. Login berikutnya pada perangkat baru akan tetap meminta OTP Telegram.
-      </div>
-    <% } %>
+  <!-- Pengaturan Password/PIN & MFA -->
+  <div class="card" style="display: flex; flex-direction: column; gap: 24px;">
+    <!-- Password -->
+    <div>
+      <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Sandi / PIN Masuk Sistem</h2>
+      <p class="hint">Buat sandi atau PIN sistem agar ketika Anda membuka TDrive dari perangkat/browser lain, Anda cukup mengetikkan sandi ini tanpa perlu meminta OTP Telegram lagi.</p>
+      
+      <form method="POST" action="/profile/password" class="form" style="margin-top: 15px;">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <label>Kata Sandi / PIN Baru
+          <input type="password" name="password" required placeholder="Masukkan kata sandi baru" />
+        </label>
+        <label>Konfirmasi Kata Sandi
+          <input type="password" name="confirm_password" required placeholder="Ketik ulang kata sandi baru" />
+        </label>
+        <button class="btn" type="submit">Simpan Kata Sandi</button>
+      </form>
+      
+      <% if (account && account.password_hash) { %>
+        <div style="margin-top: 12px; text-align: center; color: var(--ok); font-size: 13px; font-weight: 600;">
+          ✓ Akun Anda telah dilindungi dengan Sandi/PIN Masuk.
+        </div>
+      <% } else { %>
+        <div style="margin-top: 12px; text-align: center; color: var(--muted); font-size: 13px;">
+          ⚠ Anda belum mengatur sandi masuk. Login berikutnya pada perangkat baru akan tetap meminta OTP Telegram.
+        </div>
+      <% } %>
+    </div>
+
+    <!-- MFA / 2FA -->
+    <div style="border-top: 1px solid var(--border); padding-top: 20px;">
+      <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Autentikasi Dua Faktor (MFA / 2FA)</h2>
+      <p class="hint">Amankan akun Anda dengan mewajibkan verifikasi kode Google Authenticator 2FA setiap kali login menggunakan Sandi/PIN Sistem.</p>
+
+      <% if (account && account.mfa_secret) { %>
+        <div style="margin-top: 15px; background: rgba(63, 185, 80, 0.1); border: 1px solid var(--ok); border-radius: 8px; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="color: var(--ok); font-weight: 700; font-size: 14px;">✓ MFA 2FA Aktif</div>
+            <p class="hint" style="margin: 4px 0 0 0; font-size: 12px;">Akun Anda sangat aman.</p>
+          </div>
+          <form method="POST" action="/profile/mfa/disable" style="margin: 0;">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+            <button class="btn danger small" type="submit">Nonaktifkan 2FA</button>
+          </form>
+        </div>
+      <% } else { %>
+        <div style="margin-top: 15px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="color: var(--muted); font-weight: 700; font-size: 14px;">⚠ MFA 2FA Tidak Aktif</div>
+            <p class="hint" style="margin: 4px 0 0 0; font-size: 12px;">Akun belum dilindungi dengan 2FA TOTP.</p>
+          </div>
+          <a class="btn small" href="/profile/mfa/setup">Konfigurasi 2FA</a>
+        </div>
+      <% } %>
+    </div>
   </div>
+</div>
+
+<!-- PEER STORAGE & TELEGRAM CHANNELS -->
+<div class="card" style="margin-top: 24px;">
+  <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Saluran Penyimpanan Telegram (Storage Peer Selector)</h2>
+  
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 15px;" class="profile-grid">
+    <!-- Ubah Target Storage -->
+    <div>
+      <p class="hint">Tentukan ke mana berkas drive akan diunggah di Telegram. Anda bisa memasukkan `@username_channel` publik, ID channel privat (mis. `-100xxxx`), atau `me` untuk Saved Messages.</p>
+      
+      <form method="POST" action="/profile/storage-peer" class="form" style="margin-top: 15px;">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+        
+        <label>Target Peer Aktif
+          <input type="text" name="storage_peer" value="<%= account ? account.storage_peer : 'me' %>" placeholder="me atau -100xxxx" required />
+        </label>
+        <button class="btn" type="submit">Simpan Target Penyimpanan</button>
+      </form>
+    </div>
+
+    <!-- Buat Private Channel Baru -->
+    <div>
+      <p class="hint">Buat saluran Telegram privat baru secara otomatis melalui sistem TDrive untuk dijadikan penampung drive berkas mandiri.</p>
+      
+      <form method="POST" action="/profile/channel/create" class="form" style="margin-top: 15px;" onsubmit="this.querySelector('button[type=submit]').innerText = 'Sedang membuat...';">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+        
+        <label>Nama Saluran Baru
+          <input type="text" name="title" placeholder="Mis. Awan Berkas Saya" required />
+        </label>
+        <button class="btn" type="submit">Buat Private Channel &amp; Set Target</button>
+      </form>
+      
+      <div style="margin-top: 12px; font-size: 13px; color: var(--muted); font-weight: 500;">
+        Saluran buatan Anda: <strong><%= channels.length %></strong> / <%= (account && account.user_type === 'Premium') ? '500' : '10' %> terpakai (Limit Tipe <%= account ? account.user_type : 'Free' %>).
+      </div>
+    </div>
+  </div>
+
+  <!-- List Saluran Telegram Buatan Pengguna -->
+  <% if (channels.length > 0) { %>
+    <div style="margin-top: 25px;">
+      <h3 class="hint" style="text-transform: uppercase; font-size: 12px; margin-bottom: 10px;">Daftar Private Channel Buatan Anda</h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+        <% channels.forEach(function(c){ %>
+          <div class="channel-card">
+            <div>
+              <strong style="color: var(--text);"><%= c.title %></strong>
+              <div style="color: var(--muted); font-size: 11px; margin-top: 2px;">ID: <%= c.channel_id %></div>
+            </div>
+            <% if (account && account.storage_peer === c.channel_id) { %>
+              <span class="tag" style="background: var(--ok); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 20px;">Aktif</span>
+            <% } else { %>
+              <form method="POST" action="/profile/storage-peer" style="margin: 0;">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <input type="hidden" name="storage_peer" value="<%= c.channel_id %>" />
+                <button type="submit" class="btn ghost small" style="padding: 2px 8px; font-size: 11px;">Aktifkan</button>
+              </form>
+            <% } %>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+  <% } %>
 </div>
 
 <%- include('partials/footer') %>

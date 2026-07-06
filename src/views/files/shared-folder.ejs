@@ -1,0 +1,332 @@
+<%- include('../partials/header') %>
+
+<style>
+  /* Progress Overlay */
+  .progress-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 22, 33, 0.85);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: #fff;
+    padding: 20px;
+  }
+  .progress-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 30px;
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .progress-bar-container {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    height: 20px;
+    width: 100%;
+    overflow: hidden;
+    margin: 20px 0;
+    position: relative;
+  }
+  .progress-bar-fill {
+    background: linear-gradient(90deg, var(--accent), #007ee5);
+    height: 100%;
+    width: 0%;
+    transition: width 0.1s ease;
+  }
+  .progress-text {
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 10px;
+  }
+  .progress-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 12px;
+  }
+  .hp-field {
+    display: none !important;
+  }
+</style>
+
+<div class="page-head">
+  <div class="breadcrumb" style="font-size: 15px;">
+    👥 Workspace Bersama: <a href="/workspace/shared-with-me" style="font-weight: 700; color: var(--accent);"><%= rootFolder.name %></a>
+    <% if (subfolder && subfolder.id !== rootFolder.id) { %>
+      / <span><%= subfolder.name %></span>
+    <% } %>
+  </div>
+  <div style="font-size: 12px; color: var(--muted);">
+    Milik: <strong><%= ownerAccount.phone %></strong> &middot; Akses Anda: 
+    <strong><%= permission === 'write' ? 'Tulis & Baca' : 'Baca Saja' %></strong>
+  </div>
+</div>
+
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+<% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+
+<% if (permission === 'write') { %>
+  <div class="toolbar" style="margin-top: 15px;">
+    <!-- Upload Form -->
+    <form method="POST" action="/workspace/folder/<%= subfolder.uuid %>/upload" enctype="multipart/form-data" class="inline" id="uploadForm">
+      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="file" name="file" id="fileInput" required />
+      <button class="btn small" type="submit">Upload</button>
+    </form>
+
+    <!-- Create Folder Form -->
+    <form method="POST" action="/workspace/folder/<%= subfolder.uuid %>/create-folder" class="inline">
+      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="text" name="name" placeholder="Nama folder baru" required />
+      <button class="btn small ghost">+ Folder</button>
+    </form>
+  </div>
+<% } %>
+
+<table class="grid" style="margin-top: 15px;">
+  <thead>
+    <tr><th>Nama</th><th>Ukuran</th><th>Tipe</th><th>Tanggal</th><th>Aksi</th></tr>
+  </thead>
+  <tbody>
+    <% if (subfolder.id !== rootFolder.id) { %>
+      <tr>
+        <td colspan="5">
+          <% 
+            var backUrl = '/workspace/folder/' + rootFolder.uuid;
+            if (parentFolderUuid) {
+              backUrl = '/workspace/folder/' + parentFolderUuid;
+            }
+          %>
+          <a class="row-link" href="<%= backUrl %>">⬅ .. (folder induk kolaborasi)</a>
+        </td>
+      </tr>
+    <% } %>
+
+    <!-- Subfolders List -->
+    <% subfolders.forEach(function(sf){ %>
+      <tr>
+        <td><a class="row-link folder" href="/workspace/folder/<%= sf.uuid %>">📁 <%= sf.name %></a></td>
+        <td>—</td>
+        <td>Folder</td>
+        <td><%= formatDate(sf.created_at) %></td>
+        <td class="actions">
+          <a class="btn small ghost" href="/workspace/folder/<%= sf.uuid %>">Buka</a>
+        </td>
+      </tr>
+    <% }); %>
+
+    <!-- Files List -->
+    <% files.forEach(function(file){ %>
+      <tr>
+        <td>📄 <%= file.name %></td>
+        <td><%= formatSize(file.size) %></td>
+        <td><%= file.mime || '-' %></td>
+        <td><%= formatDate(file.created_at) %></td>
+        <td class="actions">
+          <a class="btn small" href="/workspace/file/<%= file.uuid %>/download">Unduh</a>
+          
+          <% 
+            var isPreviewable = file.mime && (
+              file.mime.startsWith('image/') || 
+              file.mime.startsWith('video/') || 
+              file.mime.startsWith('audio/') || 
+              file.mime === 'application/pdf'
+            );
+          %>
+          <% if (isPreviewable) { %>
+            <button type="button" class="btn small ghost" onclick="openPreviewModal('<%= file.uuid %>', '<%= file.name.replace(/'/g, "\\'") %>', '<%= file.mime %>')">Preview</button>
+          <% } %>
+
+          <% if (permission === 'write') { %>
+            <form method="POST" action="/workspace/folder/<%= subfolder.uuid %>/delete-file/<%= file.uuid %>" onsubmit="return confirm('Hapus berkas kolaborasi ini? Berkas akan dipindahkan ke keranjang sampah pemilik.');" class="inline" style="margin:0;">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <button class="btn small danger">Hapus</button>
+            </form>
+          <% } %>
+        </td>
+      </tr>
+    <% }); %>
+
+    <% if (!subfolders.length && !files.length) { %>
+      <tr><td colspan="5" class="empty-row">Kosong.</td></tr>
+    <% } %>
+  </tbody>
+</table>
+
+<!-- ---------------------------------------------------- -->
+<!-- MODAL: MEDIA PREVIEW (IN-BROWSER STREAMING) -->
+<!-- ---------------------------------------------------- -->
+<div id="previewModal" class="modal-overlay">
+  <div class="modal-card" style="max-width: 800px; width: 95%; background: var(--panel);">
+    <div class="modal-header">
+      <h3 id="previewTitle">Pratinjau Media</h3>
+      <button class="modal-close" onclick="closePreviewModal()">&times;</button>
+    </div>
+    <div id="previewContent" style="display: flex; align-items: center; justify-content: center; min-height: 200px; background: #000; border-radius: 8px; overflow: hidden; padding: 10px;">
+      <!-- Konten disuntikkan via JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ---------------------------------------------------- -->
+<!-- PROGRESS BAR OVERLAY (UPLOAD ANIMATION) -->
+<!-- ---------------------------------------------------- -->
+<div id="progressOverlay" class="progress-overlay">
+  <div class="progress-box">
+    <h3 style="margin-top: 0;" id="progressTitle">Mengunggah Berkas...</h3>
+    <p class="hint" id="progressFile">file.txt</p>
+    
+    <div class="progress-bar-container">
+      <div class="progress-bar-fill" id="progressBarFill"></div>
+    </div>
+    
+    <div class="progress-text" id="progressPercent">0%</div>
+    
+    <div class="progress-stats">
+      <span id="progressSpeed">0 KB/s</span>
+      <span id="progressTime">Menghitung...</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --- LOGIKA PROGRESS BAR UPLOAD AJAX ---
+  var uploadForm = document.getElementById('uploadForm');
+  if (uploadForm) {
+    uploadForm.addEventListener('submit', function(e) {
+      var fileInput = document.getElementById('fileInput');
+      if (!fileInput.files || fileInput.files.length === 0) return;
+      
+      var file = fileInput.files[0];
+      e.preventDefault();
+      
+      var overlay = document.getElementById('progressOverlay');
+      var bar = document.getElementById('progressBarFill');
+      var percentText = document.getElementById('progressPercent');
+      var speedText = document.getElementById('progressSpeed');
+      var timeText = document.getElementById('progressTime');
+      var titleText = document.getElementById('progressTitle');
+      var fileText = document.getElementById('progressFile');
+
+      fileText.innerText = file.name + ' (' + formatSize(file.size) + ')';
+      overlay.style.display = 'flex';
+
+      var formData = new FormData(this);
+      var xhr = new XMLHttpRequest();
+      
+      var startTime = Date.now();
+
+      xhr.upload.addEventListener('progress', function(e) {
+        if (e.lengthComputable) {
+          var percent = Math.round((e.loaded / e.total) * 100);
+          bar.style.width = percent + '%';
+          percentText.innerText = percent + '%';
+
+          var elapsed = (Date.now() - startTime) / 1000;
+          var speed = e.loaded / elapsed;
+          var speedFormatted = speed > 1024 * 1024 
+            ? (speed / (1024 * 1024)).toFixed(1) + ' MB/s' 
+            : (speed / 1024).toFixed(1) + ' KB/s';
+          
+          speedText.innerText = speedFormatted;
+
+          var remainingBytes = e.total - e.loaded;
+          var remainingTime = speed > 0 ? Math.round(remainingBytes / speed) : 0;
+          
+          if (remainingTime > 60) {
+            timeText.innerText = 'Sisa waktu: ~' + Math.floor(remainingTime / 60) + 'm ' + (remainingTime % 60) + 's';
+          } else {
+            timeText.innerText = 'Sisa waktu: ~' + remainingTime + 's';
+          }
+
+          if (percent === 100) {
+            titleText.innerText = 'Memproses di Telegram...';
+            fileText.innerText = 'Mengupload berkas selesai. Telegram sedang memproses dan memecah (chunking) file Anda. Harap tunggu sebentar...';
+            timeText.innerText = 'Harap tidak menutup halaman ini.';
+            speedText.innerText = '';
+          }
+        }
+      });
+
+      xhr.addEventListener('load', function() {
+        if (xhr.status >= 200 && xhr.status < 400) {
+          window.location.reload();
+        } else {
+          alert('Gagal mengunggah file: ' + xhr.responseText);
+          overlay.style.display = 'none';
+        }
+      });
+
+      xhr.addEventListener('error', function() {
+        alert('Terjadi kesalahan koneksi.');
+        overlay.style.display = 'none';
+      });
+
+      xhr.open('POST', this.action, true);
+      var csrfToken = this.querySelector('input[name="_csrf"]').value;
+      xhr.setRequestHeader('x-csrf-token', csrfToken);
+      xhr.send(formData);
+    });
+  }
+
+  // --- LOGIKA MEDIA PREVIEW ---
+  function openPreviewModal(uuid, name, mime) {
+    document.getElementById('previewTitle').innerText = name;
+    var contentDiv = document.getElementById('previewContent');
+    contentDiv.innerHTML = '<p style="color: #fff; font-size: 13px;">Menghubungkan ke Telegram DC dan memutar media stream. Harap tunggu...</p>';
+    document.getElementById('previewModal').style.display = 'flex';
+
+    // Rute preview kolaboratif
+    var src = '/workspace/file/' + uuid + '/download';
+    var html = '';
+
+    if (mime.startsWith('image/')) {
+      html = '<img src="' + src + '" style="max-width: 100%; max-height: 70vh; object-fit: contain;" />';
+    } else if (mime.startsWith('video/')) {
+      html = '<video controls autoplay style="width: 100%; max-height: 70vh;"><source src="' + src + '" type="' + mime + '">Browser Anda tidak mendukung video HTML5.</video>';
+    } else if (mime.startsWith('audio/')) {
+      html = '<audio controls autoplay style="width: 100%;"><source src="' + src + '" type="' + mime + '">Browser Anda tidak mendukung audio HTML5.</audio>';
+    } else if (mime === 'application/pdf') {
+      html = '<iframe src="' + src + '" style="width: 100%; height: 70vh; border: none; background: #fff;"></iframe>';
+    } else {
+      html = '<p style="color: #fff;">Tipe file tidak didukung untuk pratinjau langsung.</p>';
+    }
+
+    setTimeout(function() {
+      contentDiv.innerHTML = html;
+    }, 100);
+  }
+
+  function closePreviewModal() {
+    var contentDiv = document.getElementById('previewContent');
+    contentDiv.innerHTML = '';
+    document.getElementById('previewModal').style.display = 'none';
+  }
+
+  function formatSize(bytes) {
+    if (bytes == null || isNaN(bytes)) return '-';
+    var units = ['B', 'KB', 'MB', 'GB'];
+    var i = 0;
+    var n = Number(bytes);
+    while (n >= 1024 && i < units.length - 1) {
+      n /= 1024;
+      i++;
+    }
+    return n.toFixed(1) + ' ' + units[i];
+  }
+</script>
+
+<%- include('../partials/footer') %>

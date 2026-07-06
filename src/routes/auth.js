@@ -7,6 +7,7 @@ const telegramManager = require('../services/telegramManager');
 const accountService = require('../services/accountService');
 const fileService = require('../services/fileService');
 const cryptoService = require('../services/cryptoService');
+const totpService = require('../services/totpService');
 
 // Halaman login (form nomor telepon)
 router.get('/login', (req, res) => {
@@ -93,8 +94,13 @@ router.post('/login/verify-password', async (req, res) => {
       });
     }
     
-    // Login berhasil! Sesi didekripsi dan client diregistrasikan ke pool
-    // Panggil getClient untuk mengaktifkan koneksi telegramManager secara on-demand
+    // Login berhasil! Cek MFA terlebih dahulu
+    if (account.mfa_secret) {
+      req.session.tempLoginPhone = account.phone;
+      req.session.tempLoginAccountId = account.id;
+      return res.redirect('/login/mfa');
+    }
+    
     await telegramManager.getClient(account);
     
     req.session.authenticated = true;
@@ -129,19 +135,79 @@ router.post('/login/verify', async (req, res) => {
     }
 
     const { account, isNew } = await accountService.ensureAccountFromLogin(result);
-
     delete req.session.loginId;
+
+    // Login berhasil! Cek MFA terlebih dahulu
+    if (account.mfa_secret) {
+      req.session.tempLoginPhone = result.phone;
+      req.session.tempLoginAccountId = account.id;
+      req.session.tempLoginIsNew = isNew;
+      return res.redirect('/login/mfa');
+    }
+
     req.session.authenticated = true;
     req.session.userPhone = result.phone;
     req.session.activeAccountId = account.id;
 
-    // Arahkan ke penamaan label jika akun baru. Jika tidak, langsung ke drive.
     res.redirect(isNew ? `/accounts/${account.id}/label?welcome=1` : '/drive');
   } catch (err) {
     res.render('auth/verify', {
       title: 'Verifikasi OTP',
       phone,
       needPassword: false,
+      error: err.message,
+      csrfToken: res.locals.csrfToken,
+    });
+  }
+});
+
+// Halaman input kode MFA/2FA TOTP
+router.get('/login/mfa', (req, res) => {
+  if (!req.session.tempLoginPhone || !req.session.tempLoginAccountId) {
+    return res.redirect('/login');
+  }
+  res.render('auth/mfa', { title: 'Verifikasi 2FA', error: null, csrfToken: res.locals.csrfToken });
+});
+
+// Proses verifikasi kode MFA/2FA TOTP
+router.post('/login/mfa', async (req, res) => {
+  const { token } = req.body;
+  if (!req.session.tempLoginPhone || !req.session.tempLoginAccountId) {
+    return res.redirect('/login');
+  }
+
+  try {
+    const account = await fileService.getAccount(req.session.tempLoginAccountId);
+    if (!account || !account.mfa_secret) {
+      throw new Error('Pengaturan MFA tidak valid.');
+    }
+
+    const isValid = totpService.verifyTOTP(token, account.mfa_secret);
+    if (!isValid) {
+      return res.render('auth/mfa', {
+        title: 'Verifikasi 2FA',
+        error: 'Kode 2FA salah atau sudah kedaluwarsa. Silakan periksa aplikasi authenticator Anda.',
+        csrfToken: res.locals.csrfToken,
+      });
+    }
+
+    // Sambungkan Telegram client
+    await telegramManager.getClient(account);
+
+    req.session.authenticated = true;
+    req.session.userPhone = req.session.tempLoginPhone;
+    req.session.activeAccountId = req.session.tempLoginAccountId;
+    const isNew = req.session.tempLoginIsNew;
+
+    // Bersihkan sesi temporer
+    delete req.session.tempLoginPhone;
+    delete req.session.tempLoginAccountId;
+    delete req.session.tempLoginIsNew;
+
+    res.redirect(isNew ? `/accounts/${account.id}/label?welcome=1` : '/drive');
+  } catch (err) {
+    res.render('auth/mfa', {
+      title: 'Verifikasi 2FA',
       error: err.message,
       csrfToken: res.locals.csrfToken,
     });

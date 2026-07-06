@@ -1,0 +1,35 @@
+<%- include('../partials/header') %>
+
+<div class="card narrow" style="margin: 30px auto; max-width: 500px; text-align: center;">
+  <h2>🔒 Setup Autentikasi Dua Faktor (2FA)</h2>
+  <p class="hint">Hubungkan TDrive dengan Google Authenticator atau aplikasi sejenis untuk mengamankan akun Anda.</p>
+
+  <% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+  <div style="margin: 25px 0;">
+    <!-- Render QR Code dari Google Charts API / QRServer -->
+    <img src="<%= qrUrl %>" alt="MFA QR Code" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: #fff;" />
+  </div>
+
+  <div class="form" style="text-align: left;">
+    <label>Kunci Manual (Base32)
+      <input type="text" value="<%= secret %>" readonly onclick="this.select();" style="text-align: center; font-family: monospace; font-size: 15px; font-weight: 600;" />
+    </label>
+
+    <form method="POST" action="/profile/mfa/enable" style="margin-top: 20px;">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" name="website" style="display:none !important;" tabindex="-1" autocomplete="off" />
+      
+      <label>Kode OTP untuk Konfirmasi
+        <input type="text" name="token" required placeholder="000000" pattern="[0-9]{6}" maxlength="6" inputmode="numeric" style="text-align: center; font-size: 18px; font-weight: 700; letter-spacing: 4px;" />
+      </label>
+
+      <div style="display: flex; gap: 10px; margin-top: 15px;">
+        <button class="btn" type="submit" style="flex: 1;">Aktifkan 2FA</button>
+        <a class="btn ghost" href="/profile" style="flex: 1; text-align: center;">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

@@ -1,0 +1,133 @@
+<%- include('../partials/header') %>
+
+<style>
+  .collab-grid {
+    display: grid;
+    grid-template-columns: 2fr 1.2fr;
+    gap: 28px;
+    align-items: start;
+    margin-top: 20px;
+  }
+  @media (max-width: 900px) {
+    .collab-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .hp-field {
+    display: none !important;
+  }
+</style>
+
+<div class="page-head">
+  <div class="breadcrumb">👥 Workspace Kolaborasi</div>
+</div>
+
+<% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+<p class="hint">Bagian ini menampilkan semua berkas (folder) dan catatan yang dibagikan oleh rekan kerja Anda untuk kolaborasi bersama.</p>
+
+<div class="collab-grid">
+  <!-- Dibagikan dengan Saya -->
+  <div>
+    <div class="card">
+      <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Item yang Dibagikan dengan Saya</h2>
+      
+      <!-- Folders Kolaborasi -->
+      <h3 class="hint" style="text-transform: uppercase; font-size: 11px; margin-top: 20px; margin-bottom: 10px;">📁 Folder Kolaborasi</h3>
+      <table class="grid" style="margin-bottom: 25px;">
+        <thead>
+          <tr><th>Nama Folder</th><th>Pemilik</th><th>Akses</th><th>Aksi</th></tr>
+        </thead>
+        <tbody>
+          <% folders.forEach(function(f){ %>
+            <tr>
+              <td><strong><%= f.name %></strong></td>
+              <td><%= f.owner_phone %></td>
+              <td>
+                <% if (f.permission === 'write') { %>
+                  <span class="tag" style="background: var(--accent); color: #fff; font-size: 11px;">Tulis &amp; Baca</span>
+                <% } else { %>
+                  <span class="tag" style="background: var(--panel-2); border: 1px solid var(--border); color: var(--text); font-size: 11px;">Baca Saja</span>
+                <% } %>
+              </td>
+              <td class="actions">
+                <a class="btn small" href="/workspace/folder/<%= f.uuid %>">Buka Workspace</a>
+              </td>
+            </tr>
+          <% }); %>
+          <% if (!folders.length) { %>
+            <tr><td colspan="4" class="empty-row" style="text-align: center; color: var(--muted); font-size: 13px;">Belum ada folder yang dibagikan kepada Anda.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+
+      <!-- Catatan Kolaborasi -->
+      <h3 class="hint" style="text-transform: uppercase; font-size: 11px; margin-bottom: 10px;">📝 Catatan Kolaborasi (TNote)</h3>
+      <table class="grid">
+        <thead>
+          <tr><th>Judul Catatan</th><th>Pemilik</th><th>Akses</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <% notes.forEach(function(n){ %>
+            <tr>
+              <td><strong><%= n.title || '[Terkunci]' %></strong></td>
+              <td><%= n.owner_phone %></td>
+              <td>
+                <% if (n.permission === 'write') { %>
+                  <span class="tag" style="background: var(--accent); color: #fff; font-size: 11px;">Tulis &amp; Baca</span>
+                <% } else { %>
+                  <span class="tag" style="background: var(--panel-2); border: 1px solid var(--border); color: var(--text); font-size: 11px;">Baca Saja</span>
+                <% } %>
+              </td>
+              <td>
+                <span class="hint" style="font-size:12px;">🔒 E2E Encrypted. Sandi TNote harus disamakan secara privat.</span>
+              </td>
+            </tr>
+          <% }); %>
+          <% if (!notes.length) { %>
+            <tr><td colspan="4" class="empty-row" style="text-align: center; color: var(--muted); font-size: 13px;">Belum ada catatan yang dibagikan kepada Anda.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Berbagi Kolaborasi Saya -->
+  <div>
+    <div class="card">
+      <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Daftar Kolaborator Saya</h2>
+      <p class="hint" style="margin-bottom: 15px;">Daftar nomor rekan yang memiliki hak akses kolaborasi pada item milik Anda.</p>
+      
+      <table class="grid">
+        <thead>
+          <tr><th>Item</th><th>Kolaborator</th><th>Akses</th><th>Aksi</th></tr>
+        </thead>
+        <tbody>
+          <% mySharedWorkspaces.forEach(function(sw){ %>
+            <tr>
+              <td style="font-size: 12px; font-weight: 600;"><%= sw.item_name %></td>
+              <td style="font-size: 12px;"><%= sw.target_phone %></td>
+              <td>
+                <span class="tag" style="font-size: 10px;"><%= sw.permission %></span>
+              </td>
+              <td class="actions">
+                <form method="POST" action="/workspace/revoke-workspace/<%= sw.id %>" onsubmit="return confirm('Cabut akses kolaborasi rekan ini?');" style="margin:0;">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+                  <input type="hidden" name="redirect" value="/workspace/shared-with-me" />
+                  <button class="btn danger small" style="padding: 2px 6px; font-size: 10px;">Cabut</button>
+                </form>
+              </td>
+            </tr>
+          <% }); %>
+          <% if (!mySharedWorkspaces.length) { %>
+            <tr><td colspan="4" class="empty-row" style="text-align: center; color: var(--muted); font-size: 12px;">Anda belum mengundang kolaborator lain.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

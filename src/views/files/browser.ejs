@@ -150,26 +150,31 @@
 <% if (error) { %><div class="alert error"><%= error %></div><% } %>
 <% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
 
-<div class="toolbar">
-  <!-- Upload Form -->
-  <form method="POST" action="/drive/upload" enctype="multipart/form-data" class="inline" id="uploadForm">
-    <!-- Honeypot -->
-    <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
-    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-    <input type="hidden" name="folder_uuid" value="<%= currentFolder ? currentFolder.uuid : '' %>" />
-    <input type="file" name="file" id="fileInput" required />
-    <button class="btn small" type="submit">Upload</button>
-  </form>
+<div class="toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+  <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+    <!-- Upload Form -->
+    <form method="POST" action="/drive/upload" enctype="multipart/form-data" class="inline" id="uploadForm">
+      <!-- Honeypot -->
+      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" name="folder_uuid" value="<%= currentFolder ? currentFolder.uuid : '' %>" />
+      <input type="file" name="file" id="fileInput" required />
+      <button class="btn small" type="submit">Upload</button>
+    </form>
 
-  <!-- Create Folder Form -->
-  <form method="POST" action="/folders" class="inline">
-    <!-- Honeypot -->
-    <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
-    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-    <input type="hidden" name="parent_uuid" value="<%= currentFolder ? currentFolder.uuid : '' %>" />
-    <input type="text" name="name" placeholder="Nama folder baru" required />
-    <button class="btn small ghost">+ Folder</button>
-  </form>
+    <!-- Create Folder Form -->
+    <form method="POST" action="/folders" class="inline">
+      <!-- Honeypot -->
+      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" name="parent_uuid" value="<%= currentFolder ? currentFolder.uuid : '' %>" />
+      <input type="text" name="name" placeholder="Nama folder baru" required />
+      <button class="btn small ghost">+ Folder</button>
+    </form>
+  </div>
+  <div>
+    <a class="btn ghost small" href="/drive/trash" style="display: flex; align-items: center; gap: 6px;">🗑️ Keranjang Sampah</a>
+  </div>
 </div>
 
 <% if (query) { %>
@@ -204,6 +209,8 @@
             <button type="button" class="btn small ghost" onclick="openShareModal('folder', '<%= f.uuid %>', '<%= f.name.replace(/'/g, '\\\'') %>')">🔗 Bagikan</button>
           <% } %>
 
+          <button type="button" class="btn small ghost" onclick="openWorkspaceModal('folder', '<%= f.uuid %>', '<%= f.name.replace(/'/g, '\\\'') %>')">👥 Kolaborasi</button>
+
           <button type="button" class="btn small ghost"
             onclick="renameFolder('<%= f.uuid %>', '<%= f.name.replace(/'/g, "\\'") %>')">Rename</button>
           
@@ -225,6 +232,18 @@
         <td class="actions">
           <a class="btn small ghost" href="/drive/file/<%= file.uuid %>/download">Unduh</a>
           
+          <% 
+            var isPreviewable = file.mime && (
+              file.mime.startsWith('image/') || 
+              file.mime.startsWith('video/') || 
+              file.mime.startsWith('audio/') || 
+              file.mime === 'application/pdf'
+            );
+          %>
+          <% if (isPreviewable) { %>
+            <button type="button" class="btn small ghost" onclick="openPreviewModal('<%= file.uuid %>', '<%= file.name.replace(/'/g, "\\'") %>', '<%= file.mime %>')">Preview</button>
+          <% } %>
+
           <!-- Share Button -->
           <% if (sharesMap.file[file.id]) { %>
             <button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok);" onclick="showActiveShare('<%= file.name.replace(/'/g, '\\\'') %>', '<%= sharesMap.file[file.id] %>')">🔗 Tautan Aktif</button>
@@ -233,6 +252,7 @@
           <% } %>
 
           <a class="btn small ghost" href="/drive/file/<%= file.uuid %>/verify">Verifikasi</a>
+          <a class="btn small ghost" href="/drive/file/<%= file.uuid %>/versions">History</a>
           
           <button type="button" class="btn small ghost"
             onclick="renameFile('<%= file.uuid %>', '<%= file.name.replace(/'/g, "\\'") %>')">Rename</button>
@@ -248,7 +268,7 @@
             </select>
           </form>
 
-          <form method="POST" action="/drive/file/<%= file.uuid %>/delete" onsubmit="return confirm('Hapus file ini?');">
+          <form method="POST" action="/drive/file/<%= file.uuid %>/delete" onsubmit="return confirm('Pindahkan file ini ke tempat sampah?');">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
             <button class="btn small danger">Hapus</button>
           </form>
@@ -355,6 +375,58 @@
       <span id="progressSpeed">0 KB/s</span>
       <span id="progressTime">Menghitung...</span>
     </div>
+  </div>
+</div>
+
+<!-- ---------------------------------------------------- -->
+<!-- MODAL: MEDIA PREVIEW (IN-BROWSER STREAMING) -->
+<!-- ---------------------------------------------------- -->
+<div id="previewModal" class="modal-overlay">
+  <div class="modal-card" style="max-width: 800px; width: 95%; background: var(--panel);">
+    <div class="modal-header">
+      <h3 id="previewTitle">Pratinjau Media</h3>
+      <button class="modal-close" onclick="closePreviewModal()">&times;</button>
+    </div>
+    <div id="previewContent" style="display: flex; align-items: center; justify-content: center; min-height: 200px; background: #000; border-radius: 8px; overflow: hidden; padding: 10px;">
+      <!-- Konten disuntikkan via JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ---------------------------------------------------- -->
+<!-- MODAL: KELOLA WORKSPACE KOLABORASI -->
+<!-- ---------------------------------------------------- -->
+<div id="workspaceModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>👥 Undang Kolaborator</h3>
+      <button class="modal-close" onclick="closeWorkspaceModal()">&times;</button>
+    </div>
+    <form method="POST" action="/workspace/share-workspace" class="form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" name="redirect" id="workspaceRedirect" />
+      <input type="hidden" name="item_type" id="workspaceItemType" />
+      <input type="hidden" name="item_uuid" id="workspaceItemUuid" />
+      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+
+      <p class="hint" style="margin-top: 0;">Mengundang untuk: <strong id="workspaceItemName" style="color: var(--text);">Item</strong></p>
+
+      <label>Nomor Telepon Rekan (Format Internasional)
+        <input type="text" name="target_phone" placeholder="Mis. +62812345678" required />
+      </label>
+
+      <label>Hak Akses
+        <select name="permission">
+          <option value="read">Baca Saja (Read)</option>
+          <option value="write">Tulis &amp; Baca (Write)</option>
+        </select>
+      </label>
+
+      <div style="margin-top: 15px; display: flex; gap: 10px;">
+        <button class="btn" type="submit" style="flex: 1;">Undang</button>
+        <button class="btn ghost" type="button" onclick="closeWorkspaceModal()">Batal</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -508,6 +580,11 @@
     });
 
     xhr.open('POST', this.action, true);
+    
+    // Kirim CSRF Token via header agar dibaca middleware sebelum multer memproses multipart body
+    var csrfToken = this.querySelector('input[name="_csrf"]').value;
+    xhr.setRequestHeader('x-csrf-token', csrfToken);
+
     xhr.send(formData);
   });
 
@@ -522,6 +599,53 @@
       i++;
     }
     return n.toFixed(1) + ' ' + units[i];
+  }
+
+  // --- LOGIKA MEDIA PREVIEW ---
+  function openPreviewModal(uuid, name, mime) {
+    document.getElementById('previewTitle').innerText = name;
+    var contentDiv = document.getElementById('previewContent');
+    contentDiv.innerHTML = '<p style="color: #fff; font-size: 13px;">Menghubungkan ke Telegram DC dan memutar media stream. Harap tunggu...</p>';
+    document.getElementById('previewModal').style.display = 'flex';
+
+    var src = '/drive/file/' + uuid + '/preview';
+    var html = '';
+
+    if (mime.startsWith('image/')) {
+      html = '<img src="' + src + '" style="max-width: 100%; max-height: 70vh; object-fit: contain;" />';
+    } else if (mime.startsWith('video/')) {
+      html = '<video controls autoplay style="width: 100%; max-height: 70vh;"><source src="' + src + '" type="' + mime + '">Browser Anda tidak mendukung video HTML5.</video>';
+    } else if (mime.startsWith('audio/')) {
+      html = '<audio controls autoplay style="width: 100%;"><source src="' + src + '" type="' + mime + '">Browser Anda tidak mendukung audio HTML5.</audio>';
+    } else if (mime === 'application/pdf') {
+      html = '<iframe src="' + src + '" style="width: 100%; height: 70vh; border: none; background: #fff;"></iframe>';
+    } else {
+      html = '<p style="color: #fff;">Tipe file tidak didukung untuk pratinjau langsung.</p>';
+    }
+
+    // Set time-out tipis agar rendering transisi modal mulus
+    setTimeout(function() {
+      contentDiv.innerHTML = html;
+    }, 100);
+  }
+
+  function closePreviewModal() {
+    var contentDiv = document.getElementById('previewContent');
+    contentDiv.innerHTML = ''; // Hentikan playback video/audio dengan mengosongkan source
+    document.getElementById('previewModal').style.display = 'none';
+  }
+
+  // --- LOGIKA WORKSPACE MODAL ---
+  function openWorkspaceModal(type, uuid, name) {
+    document.getElementById('workspaceItemType').value = type;
+    document.getElementById('workspaceItemUuid').value = uuid;
+    document.getElementById('workspaceItemName').innerText = name;
+    document.getElementById('workspaceRedirect').value = currentUrl;
+    document.getElementById('workspaceModal').style.display = 'flex';
+  }
+
+  function closeWorkspaceModal() {
+    document.getElementById('workspaceModal').style.display = 'none';
   }
 </script>
 

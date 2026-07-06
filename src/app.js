@@ -25,6 +25,9 @@ const filesRouter = require('./routes/files');
 const notesRouter = require('./routes/notes');
 const profileRouter = require('./routes/profile');
 const shareRouter = require('./routes/share');
+const webdavRouter = require('./routes/webdav');
+const workspaceRouter = require('./routes/workspace');
+const auditLogsRouter = require('./routes/auditLogs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,6 +50,9 @@ app.use(
     cookie: { maxAge: 1000 * 60 * 60 * 24 * 7 }, // 7 hari
   })
 );
+
+// Rute WebDAV (Sebelum CSRF agar tidak terblokir csrf token check)
+app.use('/webdav', webdavRouter);
 
 // Proteksi CSRF untuk semua form (menyediakan res.locals.csrfToken)
 app.use(csrf);
@@ -102,6 +108,8 @@ app.use('/accounts', accountsRouter);
 app.use('/folders', foldersRouter);
 app.use('/drive', filesRouter);
 app.use('/notes', notesRouter);
+app.use('/workspace', workspaceRouter);
+app.use('/audit-trail-logs', auditLogsRouter);
 
 // 404
 app.use((req, res) => res.status(404).send('Halaman tidak ditemukan.'));

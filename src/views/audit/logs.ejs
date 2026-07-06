@@ -1,0 +1,38 @@
+<%- include('../partials/header') %>
+
+<div class="page-head">
+  <div class="breadcrumb">📋 Audit Trail Logs <span class="hint">— administrator monitoring</span></div>
+  <form method="GET" action="/audit-trail-logs" class="search">
+    <input type="text" name="q" value="<%= query %>" placeholder="Cari log..." />
+    <button class="btn small ghost">Cari</button>
+  </form>
+</div>
+
+<p class="hint">Memantau seluruh aktivitas pengguna secara global (200 log terakhir). Jejak log mencakup IP Address, aksi, nomor HP, dan payload detail.</p>
+
+<table class="grid" style="margin-top: 15px; font-size: 13px;">
+  <thead>
+    <tr><th>Waktu</th><th>Pelaku (User)</th><th>Aksi</th><th>Detail Aksi</th><th>Alamat IP</th></tr>
+  </thead>
+  <tbody>
+    <% logs.forEach(function(log){ %>
+      <tr>
+        <td style="font-family: monospace; font-size: 11px;"><%= formatDate(log.created_at) %></td>
+        <td><strong><%= log.user_phone %></strong></td>
+        <td>
+          <span class="tag" style="background: var(--panel-2); border: 1px solid var(--border); color: var(--text); font-size: 10px; font-weight: 700;">
+            <%= log.action %>
+          </span>
+        </td>
+        <td style="word-break: break-all; max-width: 400px;"><%= log.details || '-' %></td>
+        <td style="font-family: monospace; font-size: 11px; color: var(--muted);"><%= log.ip_address %></td>
+      </tr>
+    <% }); %>
+    
+    <% if (!logs.length) { %>
+      <tr><td colspan="5" class="empty-row">Tidak ada log aktivitas ditemukan.</td></tr>
+    <% } %>
+  </tbody>
+</table>
+
+<%- include('../partials/footer') %>

@@ -1,0 +1,69 @@
+<%- include('../partials/header') %>
+
+<div class="page-head">
+  <div class="breadcrumb">🗑️ Keranjang Sampah</div>
+  <div style="display: flex; gap: 10px;">
+    <a class="btn ghost small" href="/drive">⬅ Kembali ke Drive</a>
+    <% if (folders.length || files.length) { %>
+      <form method="POST" action="/drive/trash/empty" onsubmit="return confirm('Kosongkan tempat sampah secara permanen? Semua berkas di Telegram juga akan dihapus.');" style="margin:0;">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <button class="btn danger small">Empty Trash</button>
+      </form>
+    <% } %>
+  </div>
+</div>
+
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+<% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+
+<p class="hint">Berkas dan folder di sini masih tersimpan di Telegram Anda. Anda dapat memulihkannya atau menghapusnya secara permanen.</p>
+
+<table class="grid" style="margin-top: 15px;">
+  <thead>
+    <tr><th>Nama</th><th>Ukuran</th><th>Tipe</th><th>Tanggal Dihapus</th><th>Aksi</th></tr>
+  </thead>
+  <tbody>
+    <!-- Folders List -->
+    <% folders.forEach(function(f){ %>
+      <tr>
+        <td>📁 <%= f.name %></td>
+        <td>—</td>
+        <td>Folder</td>
+        <td><%= formatDate(f.deleted_at) %></td>
+        <td class="actions">
+          <form method="POST" action="/folders/<%= f.uuid %>/restore" class="inline">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <button class="btn small">Pulihkan</button>
+          </form>
+        </td>
+      </tr>
+    <% }); %>
+
+    <!-- Files List -->
+    <% files.forEach(function(file){ %>
+      <tr>
+        <td>📄 <%= file.name %></td>
+        <td><%= formatSize(file.size) %></td>
+        <td><%= file.mime || '-' %></td>
+        <td><%= formatDate(file.deleted_at) %></td>
+        <td class="actions">
+          <form method="POST" action="/drive/file/<%= file.uuid %>/restore" class="inline">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <button class="btn small">Pulihkan</button>
+          </form>
+          
+          <form method="POST" action="/drive/file/<%= file.uuid %>/delete-permanent" onsubmit="return confirm('Hapus permanen berkas ini? Tindakan ini tidak dapat dibatalkan.');" class="inline">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <button class="btn small danger">Hapus Permanen</button>
+          </form>
+        </td>
+      </tr>
+    <% }); %>
+
+    <% if (!folders.length && !files.length) { %>
+      <tr><td colspan="5" class="empty-row">Tempat sampah kosong.</td></tr>
+    <% } %>
+  </tbody>
+</table>
+
+<%- include('../partials/footer') %>

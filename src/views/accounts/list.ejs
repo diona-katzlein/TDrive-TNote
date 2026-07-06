@@ -1,8 +1,11 @@
 <%- include('../partials/header') %>
 
 <div class="page-head">
-  <h1>Accounts</h1>
-  <a class="btn" href="/accounts/add">+ Add Account</a>
+  <h1>👥 Manajemen Akun Telegram</h1>
+  <div style="display: flex; gap: 10px;">
+    <a class="btn ghost small" href="/audit-trail-logs">📋 Lihat Audit Logs</a>
+    <a class="btn" href="/accounts/add">+ Tambah Akun</a>
+  </div>
 </div>
 
 <% if (error) { %><div class="alert error"><%= error %></div><% } %>
@@ -13,29 +16,67 @@
     <a class="btn" href="/accounts/add">Tambah Akun</a>
   </div>
 <% } else { %>
-  <table class="grid">
+  <table class="grid" style="font-size: 13px;">
     <thead>
-      <tr><th>Label</th><th>Nomor</th><th>Status</th><th>Storage</th><th></th></tr>
+      <tr>
+        <th>Label / Nomor</th>
+        <th>Tipe Akun</th>
+        <th>2FA (MFA)</th>
+        <th>Peer Target</th>
+        <th>Saluran (Channels)</th>
+        <th>Storage Terpakai</th>
+        <th>Status</th>
+        <th>Aksi</th>
+      </tr>
     </thead>
     <tbody>
       <% accounts.forEach(function(a){ %>
         <tr>
           <td>
-            <%= a.label || a.phone %>
-            <% if (activeAccount && activeAccount.id === a.id) { %><span class="tag">aktif</span><% } %>
+            <strong><%= a.label || a.phone %></strong>
+            <div style="color: var(--muted); font-size: 11px; margin-top: 2px;"><%= a.phone %></div>
+            <% if (activeAccount && activeAccount.id === a.id) { %>
+              <span class="tag" style="background: var(--accent); color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 12px; font-weight: 700; margin-top: 4px; display: inline-block;">Aktif</span>
+            <% } %>
           </td>
-          <td><%= a.phone %></td>
-          <td><span class="status <%= a.status %>"><%= a.status %></span></td>
-          <td><%= a.storage_peer === 'me' ? 'Saved Messages' : a.storage_peer %></td>
+          <td>
+            <% if (a.user_type === 'Premium') { %>
+              <span class="tag" style="background: var(--accent); color: #fff; font-weight: 700;">🌟 Premium</span>
+            <% } else { %>
+              <span class="tag" style="background: var(--panel-2); border: 1px solid var(--border); color: var(--text);">Free</span>
+            <% } %>
+          </td>
+          <td>
+            <% if (a.mfa_secret) { %>
+              <span class="status active" style="font-size: 11px; font-weight: 600;">🔒 Aktif</span>
+            <% } else { %>
+              <span style="color: var(--muted); font-size: 11px;">Tidak Aktif</span>
+            <% } %>
+          </td>
+          <td>
+            <code style="font-family: monospace; font-size: 12px;"><%= a.storage_peer %></code>
+          </td>
+          <td>
+            <%= a.channelCount %> / <%= a.user_type === 'Premium' ? '500' : '10' %>
+          </td>
+          <td>
+            <strong><%= formatSize(a.storageUsed) %></strong>
+            <div style="color: var(--muted); font-size: 11px;"><%= a.fileCount %> file</div>
+          </td>
+          <td>
+            <span class="status <%= a.status %>" style="font-size: 11px; text-transform: uppercase;"><%= a.status %></span>
+          </td>
           <td class="actions">
-            <form method="POST" action="/accounts/<%= a.id %>/activate">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-              <button class="btn small ghost">Pakai</button>
-            </form>
-            <form method="POST" action="/accounts/<%= a.id %>/delete" onsubmit="return confirm('Hapus akun ini beserta metadatanya?');">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-              <button class="btn small danger">Hapus</button>
-            </form>
+            <div style="display: flex; gap: 6px;">
+              <form method="POST" action="/accounts/<%= a.id %>/activate" style="margin:0;">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <button class="btn small ghost">Gunakan</button>
+              </form>
+              <form method="POST" action="/accounts/<%= a.id %>/delete" onsubmit="return confirm('Hapus akun ini beserta seluruh metadata file & folder?');" style="margin:0;">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <button class="btn small danger">Hapus</button>
+              </form>
+            </div>
           </td>
         </tr>
       <% }); %>

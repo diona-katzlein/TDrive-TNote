@@ -65,7 +65,7 @@ router.post('/:uuid/rename', async (req, res) => {
   }
 });
 
-// Hapus folder (cascade file & subfolder via FK - IDOR-safe menggunakan UUID)
+// Soft Delete Folder (Masuk Keranjang Sampah)
 router.post('/:uuid/delete', async (req, res) => {
   const { uuid } = req.params;
   
@@ -75,49 +75,63 @@ router.post('/:uuid/delete', async (req, res) => {
       throw new Error('Folder tidak ditemukan.');
     }
 
-    // Ambil detail folder induk sebelum menghapus untuk redirect
-    let parentFolderUuid = null;
+    // Fungsi rekursif untuk soft-delete isi folder
+    async function softDeleteFolderContents(fId) {
+      // Soft-delete files
+      await db.query('UPDATE files SET deleted_at = ? WHERE folder_id = ? AND deleted_at IS NULL', [Date.now(), fId]);
+      
+      // Ambil subfolder
+      const [subfolders] = await db.query('SELECT * FROM folders WHERE parent_id = ? AND deleted_at IS NULL', [fId]);
+      for (const sf of subfolders) {
+        await softDeleteFolderContents(sf.id);
+        await db.query('UPDATE folders SET deleted_at = ? WHERE id = ?', [Date.now(), sf.id]);
+      }
+    }
+
+    await softDeleteFolderContents(folder.id);
+    await fileService.softDeleteFolder(folder.id);
+
+    await auditService.log(req, 'DELETE_FOLDER_SOFT', `Memindahkan folder ke keranjang sampah: "${folder.name}" (UUID: ${folder.uuid})`);
+
+    let redirectPath = '/drive';
     if (folder.parent_id) {
       const parent = await fileService.getFolder(folder.parent_id);
-      if (parent) parentFolderUuid = parent.uuid;
+      if (parent) redirectPath = `/drive/folder/${parent.uuid}`;
     }
-
-    // Fungsi rekursif untuk menghapus file di Telegram sebelum folder dihapus di DB
-    async function deleteFolderContents(fId) {
-      // Hapus berkas di folder ini
-      const files = await fileService.listFiles(req.activeAccount.id, fId);
-      for (const file of files) {
-        try {
-          await storageService.deleteRemote(req.activeAccount, file);
-        } catch (_) {}
-        // Hapus share link terkait berkas
-        await db.query("DELETE FROM shares WHERE item_type = 'file' AND item_id = ?", [file.id]);
-      }
-
-      // Cari subfolder dan lakukan rekursi
-      const subfolders = await fileService.listFolders(req.activeAccount.id, fId);
-      for (const sf of subfolders) {
-        await deleteFolderContents(sf.id);
-        // Hapus share link terkait subfolder
-        await db.query("DELETE FROM shares WHERE item_type = 'folder' AND item_id = ?", [sf.id]);
-      }
-    }
-
-    // Mulai proses penghapusan isi folder secara remote
-    await deleteFolderContents(folder.id);
-
-    // Hapus share link terkait folder utama ini
-    await db.query("DELETE FROM shares WHERE item_type = 'folder' AND item_id = ?", [folder.id]);
-
-    // Hapus folder dari database (ini akan memicu delete cascade pada files & subfolders di DB)
-    await fileService.deleteFolder(folder.id);
-
-    await auditService.log(req, 'DELETE_FOLDER', `Menghapus folder dan seluruh isinya: "${folder.name}" (UUID: ${folder.uuid})`);
-
-    const redirectPath = parentFolderUuid ? `/drive/folder/${parentFolderUuid}` : '/drive';
     res.redirect(redirectPath);
   } catch (err) {
     res.status(500).send('Gagal menghapus folder: ' + err.message);
+  }
+});
+
+// Restore Folder
+router.post('/:uuid/restore', async (req, res) => {
+  const { uuid } = req.params;
+  
+  try {
+    const folder = await fileService.getFolderByUuid(uuid);
+    if (!folder || folder.account_id !== req.activeAccount.id) {
+      throw new Error('Folder tidak ditemukan.');
+    }
+
+    // Fungsi rekursif untuk restore isi folder
+    async function restoreFolderContents(fId) {
+      await db.query('UPDATE files SET deleted_at = NULL WHERE folder_id = ?', [fId]);
+      
+      const [subfolders] = await db.query('SELECT * FROM folders WHERE parent_id = ?', [fId]);
+      for (const sf of subfolders) {
+        await restoreFolderContents(sf.id);
+        await db.query('UPDATE folders SET deleted_at = NULL WHERE id = ?', [sf.id]);
+      }
+    }
+
+    await restoreFolderContents(folder.id);
+    await fileService.restoreFolder(folder.id);
+
+    await auditService.log(req, 'RESTORE_FOLDER', `Memulihkan folder "${folder.name}" dari tempat sampah.`);
+    res.redirect('/drive/trash?notice=' + encodeURIComponent('Folder berhasil dipulihkan.'));
+  } catch (err) {
+    res.redirect('/drive/trash?error=' + encodeURIComponent(err.message));
   }
 });
 

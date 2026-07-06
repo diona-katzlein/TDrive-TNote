@@ -51,6 +51,22 @@ async function ensureUuidColumn(tableName) {
 }
 
 /**
+ * Memastikan kolom dinamis ada di tabel tertentu.
+ */
+async function ensureColumn(tableName, columnName, alterSql) {
+  try {
+    const [columns] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\` LIKE '${columnName}'`);
+    if (columns.length === 0) {
+      console.log(`Menambahkan kolom ${columnName} ke tabel ${tableName}...`);
+      await pool.query(alterSql);
+    }
+  } catch (err) {
+    console.error(`Gagal menambahkan kolom ${columnName} ke tabel ${tableName}:`, err);
+    throw err;
+  }
+}
+
+/**
  * Inisialisasi database MariaDB.
  * Membaca skema migrations-mariadb.sql dan menjalankannya secara idempotent.
  */
@@ -67,6 +83,13 @@ async function init() {
     await ensureUuidColumn('folders');
     await ensureUuidColumn('files');
     await ensureUuidColumn('notes');
+
+    // Jalankan migrasi kolom-kolom baru untuk Recycle Bin, File Versioning, dan MFA
+    await ensureColumn('folders', 'deleted_at', 'ALTER TABLE folders ADD COLUMN deleted_at BIGINT DEFAULT NULL');
+    await ensureColumn('files', 'deleted_at', 'ALTER TABLE files ADD COLUMN deleted_at BIGINT DEFAULT NULL');
+    await ensureColumn('files', 'parent_file_id', 'ALTER TABLE files ADD COLUMN parent_file_id INT DEFAULT NULL, ADD CONSTRAINT fk_files_parent FOREIGN KEY (parent_file_id) REFERENCES files(id) ON DELETE SET NULL');
+    await ensureColumn('accounts', 'mfa_secret', 'ALTER TABLE accounts ADD COLUMN mfa_secret VARCHAR(128) DEFAULT NULL');
+    await ensureColumn('accounts', 'user_type', 'ALTER TABLE accounts ADD COLUMN user_type VARCHAR(20) DEFAULT "Free"');
   } catch (err) {
     console.error('Gagal inisialisasi database MariaDB:', err);
     throw err;

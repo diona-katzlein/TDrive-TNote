@@ -1,0 +1,18 @@
+<%- include('../partials/auth-header') %>
+
+<div class="auth-card card narrow" style="margin: 40px auto; text-align: center;">
+  <h1>🔒 Autentikasi Dua Faktor</h1>
+  <p class="hint" style="margin-bottom: 24px;">Masukkan kode verifikasi 6-digit dari aplikasi Google Authenticator Anda untuk masuk.</p>
+
+  <% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+  <form method="POST" action="/login/mfa" class="form" style="text-align: left;">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <label>Kode OTP Authenticator
+      <input type="text" name="token" required placeholder="000000" pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autofocus style="text-align: center; font-size: 24px; letter-spacing: 8px; font-weight: 700;" />
+    </label>
+    <button class="btn" style="margin-top: 15px; width: 100%;" type="submit">Verifikasi &amp; Masuk</button>
+  </form>
+</div>
+
+<%- include('../partials/footer') %>
