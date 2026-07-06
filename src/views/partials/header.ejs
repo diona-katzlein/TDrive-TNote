@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= typeof title !== 'undefined' ? title : 'TDrive' %> · TDrive</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">T<span>Drive</span></a>
+    <nav>
+      <a href="/drive">Drive</a>
+      <a href="/accounts">Accounts</a>
+    </nav>
+    <div class="account-switch">
+      <% if (typeof accounts !== 'undefined' && accounts.length) { %>
+        <form method="POST" action="" id="switchForm">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <select onchange="if(this.value){document.getElementById('switchForm').action='/accounts/'+this.value+'/activate';document.getElementById('switchForm').submit();}">
+            <% accounts.forEach(function(a){ %>
+              <option value="<%= a.id %>" <%= (activeAccount && activeAccount.id === a.id) ? 'selected' : '' %>>
+                <%= a.label || a.phone %>
+              </option>
+            <% }); %>
+          </select>
+        </form>
+      <% } else { %>
+        <a class="btn small" href="/accounts/add">+ Add Account</a>
+      <% } %>
+    </div>
+  </header>
+  <main class="container">

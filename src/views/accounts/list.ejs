@@ -1,0 +1,46 @@
+<%- include('../partials/header') %>
+
+<div class="page-head">
+  <h1>Accounts</h1>
+  <a class="btn" href="/accounts/add">+ Add Account</a>
+</div>
+
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+<% if (!accounts.length) { %>
+  <div class="empty">
+    <p>Belum ada akun Telegram. Tambahkan satu untuk mulai menggunakan drive.</p>
+    <a class="btn" href="/accounts/add">Tambah Akun</a>
+  </div>
+<% } else { %>
+  <table class="grid">
+    <thead>
+      <tr><th>Label</th><th>Nomor</th><th>Status</th><th>Storage</th><th></th></tr>
+    </thead>
+    <tbody>
+      <% accounts.forEach(function(a){ %>
+        <tr>
+          <td>
+            <%= a.label || a.phone %>
+            <% if (activeAccount && activeAccount.id === a.id) { %><span class="tag">aktif</span><% } %>
+          </td>
+          <td><%= a.phone %></td>
+          <td><span class="status <%= a.status %>"><%= a.status %></span></td>
+          <td><%= a.storage_peer === 'me' ? 'Saved Messages' : a.storage_peer %></td>
+          <td class="actions">
+            <form method="POST" action="/accounts/<%= a.id %>/activate">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <button class="btn small ghost">Pakai</button>
+            </form>
+            <form method="POST" action="/accounts/<%= a.id %>/delete" onsubmit="return confirm('Hapus akun ini beserta metadatanya?');">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <button class="btn small danger">Hapus</button>
+            </form>
+          </td>
+        </tr>
+      <% }); %>
+    </tbody>
+  </table>
+<% } %>
+
+<%- include('../partials/footer') %>

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(curl -s -o /dev/null -w \"root HTTP %{http_code}\\\\n\" http://localhost:3062/)",
+      "Bash(curl -s -L http://localhost:3062/login)",
+      "Bash(curl -s -o /dev/null -w \"login HTTP %{http_code}\\\\n\" http://localhost:3062/login)",
+      "Bash(curl -s -o /dev/null -w \"ipv6 root HTTP %{http_code}\\\\n\" \"http://[::1]:3062/\")",
+      "Bash(curl -s -L \"http://[::1]:3062/login\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(echo \"cleaned \\(exit $?\\)\")"
+    ]
+  }
+}

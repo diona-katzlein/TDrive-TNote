@@ -1,0 +1,22 @@
+<%- include('../partials/auth-header') %>
+
+<div class="auth-card card narrow">
+  <h1>Verifikasi Login</h1>
+  <p class="hint">Kode OTP dikirim ke Telegram untuk nomor <strong><%= phone %></strong>.</p>
+
+  <% if (error) { %><div class="alert <%= needPassword ? 'info' : 'error' %>"><%= error %></div><% } %>
+
+  <form method="POST" action="/login/verify" class="form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="phone" value="<%= phone %>" />
+    <label>Kode OTP
+      <input type="text" name="code" required inputmode="numeric" placeholder="12345" autofocus />
+    </label>
+    <label>Password 2FA <%= needPassword ? '(wajib)' : '(kosongkan bila tidak pakai 2FA)' %>
+      <input type="password" name="password" <%= needPassword ? 'required' : '' %> placeholder="password cloud Telegram" />
+    </label>
+    <button class="btn" type="submit">Masuk</button>
+  </form>
+</div>
+
+<%- include('../partials/footer') %>

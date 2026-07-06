@@ -1,0 +1,138 @@
+<%- include('../partials/header') %>
+
+<div class="page-head">
+  <div class="breadcrumb">
+    <a href="/drive">Drive</a>
+    <% if (currentFolder) { %> / <span><%= currentFolder.name %></span><% } %>
+  </div>
+  <form method="GET" action="/drive" class="search">
+    <input type="text" name="q" value="<%= query %>" placeholder="Cari file..." />
+    <button class="btn small ghost">Cari</button>
+  </form>
+</div>
+
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+<% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+
+<div class="toolbar">
+  <form method="POST" action="/drive/upload?_csrf=<%= csrfToken %>" enctype="multipart/form-data" class="inline">
+    <input type="hidden" name="folder_id" value="<%= currentFolder ? currentFolder.id : '' %>" />
+    <input type="file" name="file" required />
+    <button class="btn small">Upload</button>
+  </form>
+
+  <form method="POST" action="/folders" class="inline">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="parent_id" value="<%= currentFolder ? currentFolder.id : '' %>" />
+    <input type="text" name="name" placeholder="Nama folder baru" required />
+    <button class="btn small ghost">+ Folder</button>
+  </form>
+</div>
+
+<% if (query) { %>
+  <p class="hint">Hasil pencarian untuk "<strong><%= query %></strong>"</p>
+<% } %>
+
+<table class="grid">
+  <thead>
+    <tr><th>Nama</th><th>Ukuran</th><th>Tipe</th><th>Tanggal</th><th></th></tr>
+  </thead>
+  <tbody>
+    <% if (currentFolder) { %>
+      <tr>
+        <td colspan="5">
+          <a class="row-link" href="/drive<%= currentFolder.parent_id ? '?folder=' + currentFolder.parent_id : '' %>">⬅ .. (folder induk)</a>
+        </td>
+      </tr>
+    <% } %>
+
+    <% folders.forEach(function(f){ %>
+      <tr>
+        <td><a class="row-link folder" href="/drive?folder=<%= f.id %>">📁 <%= f.name %></a></td>
+        <td>—</td>
+        <td>Folder</td>
+        <td><%= formatDate(f.created_at) %></td>
+        <td class="actions">
+          <button type="button" class="btn small ghost"
+            onclick="renameFolder(<%= f.id %>, '<%= f.name.replace(/'/g, "\\'") %>')">Rename</button>
+          <form method="POST" action="/folders/<%= f.id %>/delete" onsubmit="return confirm('Hapus folder & seluruh isinya?');">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <button class="btn small danger">Hapus</button>
+          </form>
+        </td>
+      </tr>
+    <% }); %>
+
+    <% files.forEach(function(file){ %>
+      <tr>
+        <td>📄 <%= file.name %><% if (file.is_chunked) { %> <span class="tag">chunked</span><% } %></td>
+        <td><%= formatSize(file.size) %></td>
+        <td><%= file.mime || '-' %></td>
+        <td><%= formatDate(file.created_at) %></td>
+        <td class="actions">
+          <a class="btn small ghost" href="/drive/<%= file.id %>/download">Unduh</a>
+          <a class="btn small ghost" href="/drive/<%= file.id %>/verify">Verifikasi</a>
+          <button type="button" class="btn small ghost"
+            onclick="renameFile(<%= file.id %>, '<%= file.name.replace(/'/g, "\\'") %>')">Rename</button>
+
+          <form method="POST" action="/drive/<%= file.id %>/move" class="inline">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <input type="hidden" name="from" value="<%= currentFolder ? currentFolder.id : '' %>" />
+            <select name="folder_id" onchange="this.form.submit()" title="Pindahkan ke folder">
+              <option value="" <%= !file.folder_id ? 'selected' : '' %>>— (root)</option>
+              <% allFolders.forEach(function(af){ %>
+                <option value="<%= af.id %>" <%= file.folder_id === af.id ? 'selected' : '' %>><%= af.name %></option>
+              <% }); %>
+            </select>
+          </form>
+
+          <form method="POST" action="/drive/<%= file.id %>/delete" onsubmit="return confirm('Hapus file ini?');">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <button class="btn small danger">Hapus</button>
+          </form>
+        </td>
+      </tr>
+    <% }); %>
+
+    <% if (!folders.length && !files.length) { %>
+      <tr><td colspan="5" class="empty-row">Kosong. Unggah file atau buat folder.</td></tr>
+    <% } %>
+  </tbody>
+</table>
+
+<% if (stats) { %>
+  <p class="hint stats">Total: <strong><%= stats.count %></strong> file · <strong><%= formatSize(stats.total) %></strong> terpakai di drive ini.</p>
+<% } %>
+
+<!-- Form tersembunyi untuk rename (diisi via prompt) -->
+<form method="POST" id="renameFileForm" style="display:none">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+  <input type="hidden" name="name" id="renameFileName" />
+</form>
+<form method="POST" id="renameFolderForm" style="display:none">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+  <input type="hidden" name="name" id="renameFolderName" />
+</form>
+
+<script>
+  function renameFile(id, current) {
+    var name = window.prompt('Nama baru untuk file:', current);
+    if (name && name.trim()) {
+      var f = document.getElementById('renameFileForm');
+      f.action = '/drive/' + id + '/rename';
+      document.getElementById('renameFileName').value = name.trim();
+      f.submit();
+    }
+  }
+  function renameFolder(id, current) {
+    var name = window.prompt('Nama baru untuk folder:', current);
+    if (name && name.trim()) {
+      var f = document.getElementById('renameFolderForm');
+      f.action = '/folders/' + id + '/rename';
+      document.getElementById('renameFolderName').value = name.trim();
+      f.submit();
+    }
+  }
+</script>
+
+<%- include('../partials/footer') %>

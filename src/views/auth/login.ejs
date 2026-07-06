@@ -1,0 +1,30 @@
+<%- include('../partials/auth-header') %>
+
+<div class="auth-card card narrow">
+  <h1>Masuk ke TDrive</h1>
+  <p class="hint">Login menggunakan akun Telegram Anda. Dapatkan
+    <code>api_id</code> &amp; <code>api_hash</code> dari
+    <a href="https://my.telegram.org" target="_blank" rel="noopener">my.telegram.org</a>.
+  </p>
+
+  <% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+  <form method="POST" action="/login/send-code" class="form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <label>Label (opsional)
+      <input type="text" name="label" placeholder="Drive Utama" />
+    </label>
+    <label>API ID
+      <input type="number" name="api_id" required placeholder="1234567" />
+    </label>
+    <label>API Hash
+      <input type="text" name="api_hash" required placeholder="abcd1234..." />
+    </label>
+    <label>Nomor Telepon
+      <input type="text" name="phone" required placeholder="+62812xxxxxxx" />
+    </label>
+    <button class="btn" type="submit">Kirim Kode OTP</button>
+  </form>
+</div>
+
+<%- include('../partials/footer') %>
