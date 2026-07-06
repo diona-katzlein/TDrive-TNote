@@ -106,10 +106,15 @@ async function uploadFile(account, { tempPath, filename, mime, size, folderId })
 
   if (actualSize <= CHUNK_SIZE) {
     // Satu pesan
+    console.log(`[GramJS] Mengunggah file tunggal dengan 4 workers: ${filename}`);
+    const uploadedFileHandle = await client.uploadFile({
+      file: new CustomFile(filename, actualSize, tempPath),
+      workers: 4,
+    });
     const message = await telegramManager.withFloodRetry(
       () =>
         client.sendFile(peer, {
-          file: new CustomFile(filename, actualSize, tempPath),
+          file: uploadedFileHandle,
           forceDocument: true,
           caption: filename,
         }),
@@ -127,10 +132,15 @@ async function uploadFile(account, { tempPath, filename, mime, size, folderId })
       await writeSlice(tempPath, start, end, partPath);
       try {
         const partName = `${filename}.part${String(i).padStart(3, '0')}`;
+        console.log(`[GramJS] Mengunggah chunk ${i+1}/${total} dengan 4 workers: ${partName}`);
+        const uploadedFileHandle = await client.uploadFile({
+          file: new CustomFile(partName, partSize, partPath),
+          workers: 4,
+        });
         const message = await telegramManager.withFloodRetry(
           () =>
             client.sendFile(peer, {
-              file: new CustomFile(partName, partSize, partPath),
+              file: uploadedFileHandle,
               forceDocument: true,
               caption: `${filename} [${i + 1}/${total}]`,
             }),

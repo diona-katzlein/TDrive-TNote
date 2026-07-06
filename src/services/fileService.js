@@ -142,7 +142,7 @@ async function createFileWithChunks(meta, chunks) {
     const u = crypto.randomUUID();
     const [fileResult] = await conn.query(
       `INSERT INTO files (account_id, folder_id, name, size, mime, sha256, is_chunked, uuid, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         meta.accountId,
         meta.folderId || null,

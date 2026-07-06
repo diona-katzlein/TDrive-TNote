@@ -84,14 +84,14 @@ app.use('/login', authLimiter);
 // Rute autentikasi (tidak terproteksi): /login, /login/send-code, /login/verify, /logout
 app.use(authRouter);
 
+// Sediakan daftar akun + akun aktif ke semua view terproteksi (jika sudah login)
+app.use(activeAccount);
+
 // Rute berbagi publik (akses terbuka untuk umum, tidak masuk requireLogin)
 app.use('/share', shareRouter);
 
 // Gerbang: semua di bawah ini wajib login via Telegram
 app.use(requireLogin);
-
-// Sediakan daftar akun + akun aktif ke semua view terproteksi
-app.use(activeAccount);
 
 // Rute Akar (Root Redirect)
 app.get('/', (req, res) => {

@@ -37,7 +37,10 @@ function envCredentials() {
 
 function buildClient(apiId, apiHash, sessionStr = '') {
   return new TelegramClient(new StringSession(sessionStr), Number(apiId), String(apiHash), {
-    connectionRetries: 5,
+    connectionRetries: 10,
+    requestRetries: 5,
+    timeout: 60000, // 60s request timeout
+    autoReconnect: true,
   });
 }
 

@@ -11,6 +11,9 @@ const { isPhoneAllowed, normPhone } = require('../services/accountService');
  */
 async function activeAccount(req, res, next) {
   try {
+    if (!req.session || !req.session.authenticated) {
+      return next();
+    }
     const isAllowedUser = isPhoneAllowed(req.session.userPhone);
     let accounts = await fileService.listAccounts();
 

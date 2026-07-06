@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 
+const db = require('../db');
 const fileService = require('../services/fileService');
 const telegramManager = require('../services/telegramManager');
 const accountService = require('../services/accountService');
