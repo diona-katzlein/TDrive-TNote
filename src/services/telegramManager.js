@@ -36,9 +36,11 @@ function envCredentials() {
 }
 
 /**
- * RSA Public Key untuk Telegram Test DC.
+ * RSA Public Key untuk Telegram Test DC (dimuat dari env secara aman).
  */
-const TEST_DC_PUBLIC_KEY = `-----BEGIN RSA PUBLIC KEY-----
+const TEST_DC_PUBLIC_KEY = process.env.TDRIVE_TEST_DC_PUBLIC_KEY
+  ? process.env.TDRIVE_TEST_DC_PUBLIC_KEY.replace(/\\n/g, '\n')
+  : `-----BEGIN RSA PUBLIC KEY-----
 MIIBCgKCAQEAyMEdY1aR+sCR3ZSJrtztKTKqigvO/vBfqACJLZtS7QMgCGXJ6XIR
 yy7mx66W0/sOFa7/1mAZtEoIokDP3ShoqF4fVNb6XeqgQfaUHd8wJpDWHcR2OFwv
 plUUI1PLTktZ9uW2WE23b+ixNwJjJGwBDJPQEQFBE+vfmH0JP503wr5INS1poWg/
