@@ -34,8 +34,8 @@ function resolvePeer(account, customPeerStr) {
   try {
     obj = JSON.parse(peerStr);
   } catch (_) {
-    // Jika manual username channel (mis. @Film) atau ID mentah (mis. -100xxxx)
-    if (typeof peerStr === 'string' && (peerStr.startsWith('@') || peerStr.startsWith('-'))) {
+    // Jika manual username channel (mis. @Film) atau ID mentah (mis. -100xxxx, atau 204xxxx)
+    if (typeof peerStr === 'string' && (peerStr.startsWith('@') || peerStr.startsWith('-') || /^\d+$/.test(peerStr))) {
       return peerStr;
     }
     return 'me';

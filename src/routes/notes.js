@@ -224,6 +224,14 @@ router.get('/', async (req, res) => {
       notes = notes.filter((n) => n.category === filterCat);
     }
 
+    // Hapus share link yang sudah kedaluwarsa secara otomatis
+    await db.query(
+      `DELETE FROM shares 
+       WHERE (expires_at IS NOT NULL AND ? > expires_at) 
+          OR (max_views IS NOT NULL AND views_count >= max_views)`,
+      [Date.now()]
+    );
+
     // Ambil daftar share aktif khusus tipe catatan untuk akun aktif
     const [shares] = await db.query(
       `SELECT s.uuid, s.item_id 
@@ -312,6 +320,14 @@ router.get('/:uuid', async (req, res) => {
     
     const notes = await noteService.listNotes(req.activeAccount.id, key);
     const categories = [...new Set(notes.map((n) => n.category).filter(Boolean))].sort();
+
+    // Hapus share link yang sudah kedaluwarsa secara otomatis
+    await db.query(
+      `DELETE FROM shares 
+       WHERE (expires_at IS NOT NULL AND ? > expires_at) 
+          OR (max_views IS NOT NULL AND views_count >= max_views)`,
+      [Date.now()]
+    );
 
     // Ambil share link jika ada
     const [shares] = await db.query(

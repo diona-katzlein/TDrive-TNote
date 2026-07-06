@@ -177,31 +177,23 @@ router.post('/channel/create', requireActiveAccount, async (req, res) => {
       megagroup: false,
     }));
 
-    let channelId = null;
-    const updates = result.updates;
-    for (const u of updates) {
-      if (u.channelId) {
-        channelId = String(u.channelId);
-        break;
-      }
-    }
-    if (!channelId && result.chats && result.chats.length > 0) {
-      channelId = String(result.chats[0].id);
+    const chat = result.chats && result.chats[0];
+    if (!chat) {
+      throw new Error('Gagal mengekstrak channel baru dari Telegram API.');
     }
 
-    if (!channelId) {
-      throw new Error('Gagal mengekstrak ID Channel yang baru dibuat.');
-    }
+    const channelId = chat.id.toString();
+    const accessHash = chat.accessHash ? chat.accessHash.toString() : '0';
+    const peerJson = JSON.stringify({ channelId, accessHash });
 
-    // Catatan: Telegram channel ID di GramJS biasanya berupa string angka negatif atau format ID mentah.
-    // Kita simpan ke DB.
+    // Catatan: Simpan ke DB dengan format JSON agar dikenali oleh resolvePeer
     await db.query(
       'INSERT INTO user_channels (account_id, channel_id, title, created_at) VALUES (?, ?, ?, ?)',
-      [account.id, channelId, title, Date.now()]
+      [account.id, peerJson, title, Date.now()]
     );
 
     // 4. Otomatis set channel ID sebagai Storage Peer aktif
-    await fileService.updateAccountStoragePeer(account.id, channelId);
+    await fileService.updateAccountStoragePeer(account.id, peerJson);
 
     await auditService.log(req, 'CREATE_STORAGE_CHANNEL', `Membuat private channel "${title}" (ID: ${channelId}) dan menjadikannya peer penyimpanan.`);
     res.redirect('/profile?notice=' + encodeURIComponent(`Private channel "${title}" berhasil dibuat dan dikonfigurasi sebagai peer penyimpanan aktif!`));
