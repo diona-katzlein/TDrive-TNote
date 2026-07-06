@@ -189,7 +189,7 @@ async function uploadFile(account, { tempPath, filename, mime, size, folderId, s
 async function downloadToStream(account, file, writable) {
   const client = await telegramManager.getClient(account);
   const peer = resolvePeer(account);
-  const chunks = fileService.getFileChunks(file.id);
+  const chunks = await fileService.getFileChunks(file.id);
 
   for (const chunk of chunks) {
     const messages = await telegramManager.withFloodRetry(

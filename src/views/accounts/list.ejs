@@ -1,10 +1,63 @@
-<%- include('../partials/header') %>
+<style>
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .grid-responsive {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .grid-responsive th, .grid-responsive td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .grid-responsive th {
+    background: var(--panel-2);
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .grid-responsive tr:last-child td {
+    border-bottom: none;
+  }
+  .peer-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 11px;
+    color: var(--text);
+  }
+  @media (max-width: 768px) {
+    .page-head {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .page-head div {
+      width: 100%;
+    }
+    .page-head a {
+      flex: 1;
+      text-align: center;
+    }
+  }
+</style>
 
 <div class="page-head">
   <h1>👥 Manajemen Akun Telegram</h1>
-  <div style="display: flex; gap: 10px;">
+  <div style="display: flex; gap: 10px; flex-wrap: wrap;">
     <a class="btn ghost small" href="/audit-trail-logs">📋 Lihat Audit Logs</a>
-    <a class="btn" href="/accounts/add">+ Tambah Akun</a>
+    <a class="btn small" href="/accounts/add">+ Tambah Akun</a>
   </div>
 </div>
 
@@ -16,74 +69,85 @@
     <a class="btn" href="/accounts/add">Tambah Akun</a>
   </div>
 <% } else { %>
-  <table class="grid" style="font-size: 13px;">
-    <thead>
-      <tr>
-        <th>Label / Nomor</th>
-        <th>Tipe Akun</th>
-        <th>2FA (MFA)</th>
-        <th>Peer Target</th>
-        <th>Saluran (Channels)</th>
-        <th>Storage Terpakai</th>
-        <th>Status</th>
-        <th>Aksi</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% accounts.forEach(function(a){ %>
+  <div class="table-responsive">
+    <table class="grid-responsive">
+      <thead>
         <tr>
-          <td>
-            <strong><%= a.label || a.phone %></strong>
-            <div style="color: var(--muted); font-size: 11px; margin-top: 2px;"><%= a.phone %></div>
-            <% if (activeAccount && activeAccount.id === a.id) { %>
-              <span class="tag" style="background: var(--accent); color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 12px; font-weight: 700; margin-top: 4px; display: inline-block;">Aktif</span>
-            <% } %>
-          </td>
-          <td>
-            <form method="POST" action="/accounts/<%= a.id %>/update-type" style="margin: 0;">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-              <select name="user_type" onchange="this.form.submit()" style="font-size: 12px; padding: 2px 6px; border-radius: 4px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); font-weight: 600;">
-                <option value="Free" <%= a.user_type === 'Free' ? 'selected' : '' %>>Free</option>
-                <option value="Premium" <%= a.user_type === 'Premium' ? 'selected' : '' %>>Premium 🌟</option>
-              </select>
-            </form>
-          </td>
-          <td>
-            <% if (a.mfa_secret) { %>
-              <span class="status active" style="font-size: 11px; font-weight: 600;">🔒 Aktif</span>
-            <% } else { %>
-              <span style="color: var(--muted); font-size: 11px;">Tidak Aktif</span>
-            <% } %>
-          </td>
-          <td>
-            <code style="font-family: monospace; font-size: 12px;"><%= a.storage_peer %></code>
-          </td>
-          <td>
-            <%= a.channelCount %> / <%= a.user_type === 'Premium' ? '500' : '10' %>
-          </td>
-          <td>
-            <strong><%= formatSize(a.storageUsed) %></strong>
-            <div style="color: var(--muted); font-size: 11px;"><%= a.fileCount %> file</div>
-          </td>
-          <td>
-            <span class="status <%= a.status %>" style="font-size: 11px; text-transform: uppercase;"><%= a.status %></span>
-          </td>
-          <td class="actions">
-            <div style="display: flex; gap: 6px;">
-              <form method="POST" action="/accounts/<%= a.id %>/activate" style="margin:0;">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                <button class="btn small ghost">Gunakan</button>
-              </form>
-              <form method="POST" action="/accounts/<%= a.id %>/delete" onsubmit="return confirm('Hapus akun ini beserta seluruh metadata file & folder?');" style="margin:0;">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                <button class="btn small danger">Hapus</button>
-              </form>
-            </div>
-          </td>
+          <th>Label / Nomor</th>
+          <th>Tipe Akun</th>
+          <th>2FA (MFA)</th>
+          <th>Peer Target</th>
+          <th>Saluran (Channels)</th>
+          <th>Storage Terpakai</th>
+          <th>Status</th>
+          <th>Aksi</th>
         </tr>
-      <% }); %>
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        <% accounts.forEach(function(a){ %>
+          <%
+            var displayPeer = a.storage_peer || 'me';
+            try {
+              var parsed = JSON.parse(a.storage_peer);
+              displayPeer = parsed.channelId || a.storage_peer;
+            } catch (_) {}
+          %>
+          <tr>
+            <td>
+              <strong><%= a.label || a.phone %></strong>
+              <div style="color: var(--muted); font-size: 11px; margin-top: 2px;"><%= a.phone %></div>
+              <% if (activeAccount && activeAccount.id === a.id) { %>
+                <span class="tag" style="background: var(--accent); color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 12px; font-weight: 700; margin-top: 4px; display: inline-block;">Aktif</span>
+              <% } %>
+            </td>
+            <td>
+              <form method="POST" action="/accounts/<%= a.id %>/update-type" style="margin: 0;">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <select name="user_type" onchange="this.form.submit()" style="font-size: 12px; padding: 4px 8px; border-radius: 6px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); font-weight: 600; cursor: pointer;">
+                  <option value="Free" <%= a.user_type === 'Free' ? 'selected' : '' %>>Free</option>
+                  <option value="Premium" <%= a.user_type === 'Premium' ? 'selected' : '' %>>Premium 🌟</option>
+                </select>
+              </form>
+            </td>
+            <td>
+              <% if (a.mfa_secret) { %>
+                <span class="status active" style="font-size: 11px; font-weight: 600;">🔒 Aktif</span>
+              <% } else { %>
+                <span style="color: var(--muted); font-size: 11px;">Tidak Aktif</span>
+              <% } %>
+            </td>
+            <td>
+              <span class="peer-badge" title="<%= a.storage_peer %>">
+                <%= displayPeer === 'me' ? '📥 Saved Messages (me)' : '📢 ' + displayPeer %>
+              </span>
+            </td>
+            <td>
+              <strong><%= a.channelCount %></strong> / <%= a.user_type === 'Premium' ? '500' : '10' %>
+            </td>
+            <td>
+              <strong><%= formatSize(a.storageUsed) %></strong>
+              <div style="color: var(--muted); font-size: 11px;"><%= a.fileCount %> file</div>
+            </td>
+            <td>
+              <span class="status <%= a.status %>" style="font-size: 11px; text-transform: uppercase;"><%= a.status %></span>
+            </td>
+            <td class="actions">
+              <div style="display: flex; gap: 6px;">
+                <form method="POST" action="/accounts/<%= a.id %>/activate" style="margin:0;">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <button class="btn small ghost" style="padding: 4px 10px;">Gunakan</button>
+                </form>
+                <form method="POST" action="/accounts/<%= a.id %>/delete" onsubmit="return confirm('Hapus akun ini beserta seluruh metadata file & folder?');" style="margin:0;">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <button class="btn small danger" style="padding: 4px 10px;">Hapus</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
 <% } %>
 
 <%- include('../partials/footer') %>
