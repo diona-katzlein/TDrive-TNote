@@ -5,3 +5,5 @@ data/
 .env
 npm-debug.log*
 .DS_Store
+.cloude/
+docs/

@@ -90,6 +90,11 @@ async function init() {
     await ensureColumn('files', 'parent_file_id', 'ALTER TABLE files ADD COLUMN parent_file_id INT DEFAULT NULL, ADD CONSTRAINT fk_files_parent FOREIGN KEY (parent_file_id) REFERENCES files(id) ON DELETE SET NULL');
     await ensureColumn('accounts', 'mfa_secret', 'ALTER TABLE accounts ADD COLUMN mfa_secret VARCHAR(128) DEFAULT NULL');
     await ensureColumn('accounts', 'user_type', 'ALTER TABLE accounts ADD COLUMN user_type VARCHAR(20) DEFAULT "Free"');
+
+    // Perbesar ukuran channel_id di user_channels agar muat JSON string storage peer
+    try {
+      await pool.query('ALTER TABLE user_channels MODIFY COLUMN channel_id VARCHAR(255) NOT NULL');
+    } catch (_) {}
   } catch (err) {
     console.error('Gagal inisialisasi database MariaDB:', err);
     throw err;

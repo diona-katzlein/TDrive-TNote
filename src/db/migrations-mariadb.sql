@@ -114,7 +114,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
 CREATE TABLE IF NOT EXISTS user_channels (
   id            INT AUTO_INCREMENT PRIMARY KEY,
   account_id    INT NOT NULL,
-  channel_id    VARCHAR(50) NOT NULL UNIQUE,
+  channel_id    VARCHAR(255) NOT NULL UNIQUE,
   title         VARCHAR(255) NOT NULL,
   created_at    BIGINT NOT NULL,
   CONSTRAINT fk_user_channels_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
