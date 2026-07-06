@@ -5,17 +5,38 @@ const path = require('path');
 const crypto = require('crypto');
 const mysql = require('mysql2/promise');
 
-const pool = mysql.createPool({
+const dbName = process.env.DB_DATABASE || 'tdrive';
+const dbConfig = {
   host: process.env.DB_HOST || '127.0.0.1',
   port: Number(process.env.DB_PORT) || 3307,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_DATABASE || 'tdrive',
+};
+
+// Buat pool tanpa memilih database terlebih dahulu agar tidak crash jika DB belum ada
+const pool = mysql.createPool({
+  ...dbConfig,
+  database: dbName,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   multipleStatements: true, // Izinkan multi-statement SQL untuk migrasi
 });
+
+/**
+ * Membuat database jika belum ada
+ */
+async function ensureDatabaseExists() {
+  const tempConn = await mysql.createConnection(dbConfig);
+  try {
+    await tempConn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+    console.log(`[Database] Memastikan database \`${dbName}\` tersedia.`);
+  } catch (err) {
+    console.error(`[Database] Gagal memastikan database \`${dbName}\` ada:`, err.message);
+  } finally {
+    await tempConn.end();
+  }
+}
 
 /**
  * Memastikan kolom uuid ada dan terpopulasi di tabel tertentu.
@@ -72,6 +93,9 @@ async function ensureColumn(tableName, columnName, alterSql) {
  */
 async function init() {
   try {
+    // Pastikan database sudah dibuat
+    await ensureDatabaseExists();
+
     const migrationPath = path.join(__dirname, 'migrations-mariadb.sql');
     const migrationSql = fs.readFileSync(migrationPath, 'utf8');
     
