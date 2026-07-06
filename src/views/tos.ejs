@@ -1,0 +1,224 @@
+<%- include('partials/header') %>
+
+<style>
+  .legal-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding-bottom: 40px;
+  }
+  .legal-page h1 {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0 0 8px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .legal-page .legal-subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 30px;
+  }
+  .legal-page .legal-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    transition: border-color 0.2s;
+  }
+  .legal-page .legal-card:hover {
+    border-color: var(--accent);
+  }
+  .legal-page .legal-card h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 14px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .legal-page .legal-card p,
+  .legal-page .legal-card li {
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--text);
+    opacity: 0.85;
+  }
+  .legal-page .legal-card ul,
+  .legal-page .legal-card ol {
+    padding-left: 20px;
+    margin: 10px 0;
+  }
+  .legal-page .legal-card li {
+    margin-bottom: 6px;
+  }
+  .legal-page .legal-card strong {
+    color: var(--text);
+    opacity: 1;
+  }
+  .legal-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: rgba(88, 166, 255, 0.15);
+    color: var(--accent);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+  }
+  .tos-warning {
+    background: rgba(210, 153, 34, 0.1);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 14px;
+    color: var(--text);
+  }
+  .tos-warning .warn-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+</style>
+
+<div class="legal-page">
+  <div class="page-head" style="border: none; margin-bottom: 0; padding-bottom: 0;">
+    <h1>📜 Ketentuan Layanan</h1>
+    <div class="legal-subtitle">
+      Terakhir diperbarui: Juli 2026 · <span class="legal-badge">v1.0</span>
+    </div>
+  </div>
+
+  <div class="tos-warning">
+    <div class="warn-icon">⚠️</div>
+    <div>
+      Dengan mengakses atau menggunakan layanan <strong>TDrive & TNote</strong>, Anda dianggap telah membaca, memahami, dan menyetujui semua ketentuan yang tercantum di bawah ini. Jika Anda tidak menyetujui ketentuan ini, harap jangan menggunakan layanan kami.
+    </div>
+  </div>
+
+  <div class="legal-card">
+    <h2>1️⃣ Definisi Layanan</h2>
+    <p>
+      <strong>TDrive</strong> adalah layanan manajemen berkas awan (cloud drive) yang memanfaatkan infrastruktur Telegram sebagai media penyimpanan melalui Telegram MTProto API. <strong>TNote</strong> adalah fitur catatan awan (cloud note) terintegrasi.
+    </p>
+    <p>
+      Layanan ini bersifat <strong>self-hosted</strong> — operator server (Administrator) bertanggung jawab atas pengelolaan dan keamanan instance TDrive.
+    </p>
+  </div>
+
+  <div class="legal-card">
+    <h2>2️⃣ Akun dan Akses</h2>
+    <ul>
+      <li>Untuk menggunakan TDrive, Anda memerlukan akun Telegram yang valid dan aktif.</li>
+      <li>Autentikasi dilakukan melalui <strong>OTP (One-Time Password)</strong> yang dikirimkan ke nomor Telegram Anda, atau melalui <strong>Sandi/PIN Sistem</strong> jika telah dikonfigurasi.</li>
+      <li>Anda bertanggung jawab untuk menjaga keamanan kredensial login Anda, termasuk kata sandi sistem dan kode MFA/2FA.</li>
+      <li>Administrator berhak menonaktifkan atau menghapus akun Anda kapan saja dengan atau tanpa pemberitahuan sebelumnya.</li>
+    </ul>
+  </div>
+
+  <div class="legal-card">
+    <h2>3️⃣ Tipe Akun</h2>
+    <p>TDrive menyediakan dua tipe akun:</p>
+    <ul>
+      <li><strong>Free User</strong> — Dapat membuat hingga <strong>10 Private Channel</strong> untuk penyimpanan berkas.</li>
+      <li><strong>Premium User</strong> — Dapat membuat hingga <strong>500 Private Channel</strong> untuk penyimpanan berkas, dengan akses ke fitur-fitur lanjutan.</li>
+    </ul>
+    <p>Perubahan tipe akun dilakukan oleh Administrator melalui panel Accounts.</p>
+  </div>
+
+  <div class="legal-card">
+    <h2>4️⃣ Penggunaan yang Diizinkan</h2>
+    <p>Anda setuju untuk menggunakan TDrive & TNote hanya untuk tujuan yang sah dan tidak melanggar hukum. Secara khusus, Anda <strong>dilarang</strong>:</p>
+    <ul>
+      <li>Mengunggah atau menyimpan konten ilegal, berbahaya, atau melanggar hak cipta pihak ketiga.</li>
+      <li>Menyalahgunakan layanan untuk spam, phishing, atau distribusi malware.</li>
+      <li>Mencoba meretas, merusak, atau mengganggu operasi server TDrive.</li>
+      <li>Membagikan akses akun Anda kepada pihak yang tidak berwenang.</li>
+      <li>Melakukan reverse engineering atau mendekompilasi layanan tanpa izin.</li>
+    </ul>
+  </div>
+
+  <div class="legal-card">
+    <h2>5️⃣ Hak Kekayaan Intelektual</h2>
+    <p>
+      TDrive & TNote adalah perangkat lunak open-source yang tersedia di 
+      <a href="https://github.com/diona-katzlein/TDrive-TNote" target="_blank" style="color: var(--accent); font-weight: 600;">GitHub</a>. 
+      Hak cipta atas kode sumber dimiliki oleh para kontributor proyek.
+    </p>
+    <p>
+      Konten yang Anda unggah atau buat (berkas, catatan) tetap menjadi <strong>hak milik Anda sepenuhnya</strong>. TDrive tidak mengklaim kepemilikan atas konten pengguna.
+    </p>
+  </div>
+
+  <div class="legal-card">
+    <h2>6️⃣ Penyimpanan dan Ketersediaan Data</h2>
+    <ul>
+      <li>Berkas disimpan di infrastruktur <strong>Telegram</strong> melalui akun atau channel Anda. Ketersediaan data bergantung pada layanan Telegram.</li>
+      <li>TDrive menyimpan <strong>metadata</strong> (nama, ukuran, referensi ID Telegram) di database lokal server.</li>
+      <li>Administrator dapat melakukan <strong>backup database</strong> secara berkala, namun pemulihan data tidak dijamin dalam semua situasi.</li>
+      <li>Berkas yang dihapus akan dipindahkan ke <strong>Recycle Bin</strong> sebelum dihapus permanen.</li>
+    </ul>
+  </div>
+
+  <div class="legal-card">
+    <h2>7️⃣ Kolaborasi dan Berbagi</h2>
+    <ul>
+      <li>Anda dapat membagikan catatan TNote melalui <strong>Shared Link</strong> dengan pengaturan keamanan seperti kata sandi, batas waktu, dan batas jumlah akses.</li>
+      <li><strong>Shared Workspaces</strong> memungkinkan kolaborasi multi-user. Anda bertanggung jawab atas konten yang Anda bagikan.</li>
+      <li>Administrator dapat memonitor aktivitas sharing melalui Audit Trail.</li>
+    </ul>
+  </div>
+
+  <div class="legal-card">
+    <h2>8️⃣ Batasan Tanggung Jawab</h2>
+    <p>
+      TDrive & TNote disediakan <strong>"sebagaimana adanya" (as-is)</strong> tanpa jaminan apa pun, baik tersurat maupun tersirat. Secara khusus:
+    </p>
+    <ul>
+      <li>Kami tidak menjamin bahwa layanan akan selalu tersedia, bebas dari gangguan atau kesalahan.</li>
+      <li>Kami tidak bertanggung jawab atas kehilangan data yang disebabkan oleh kegagalan Telegram, kerusakan server, atau kesalahan pengguna.</li>
+      <li>Penggunaan Telegram MTProto API tunduk pada <a href="https://core.telegram.org/api/terms" target="_blank" style="color: var(--accent);">Ketentuan Telegram</a>.</li>
+    </ul>
+  </div>
+
+  <div class="legal-card">
+    <h2>9️⃣ Pemutusan Layanan</h2>
+    <p>
+      Administrator berhak menghentikan akses Anda ke layanan TDrive kapan saja, terutama jika terdeteksi pelanggaran terhadap ketentuan ini. Dalam hal pemutusan:
+    </p>
+    <ul>
+      <li>Berkas Anda di Telegram <strong>tetap utuh</strong> dan dapat diakses langsung dari aplikasi Telegram.</li>
+      <li>Metadata dan catatan di database lokal TDrive mungkin dihapus oleh administrator.</li>
+    </ul>
+  </div>
+
+  <div class="legal-card">
+    <h2>🔄 Perubahan Ketentuan</h2>
+    <p>
+      Kami berhak memperbarui Ketentuan Layanan ini sewaktu-waktu. Perubahan material akan diumumkan melalui antarmuka TDrive. Dengan terus menggunakan layanan setelah perubahan, Anda dianggap menyetujui ketentuan yang diperbarui.
+    </p>
+  </div>
+
+  <div class="legal-card">
+    <h2>📧 Kontak</h2>
+    <p>
+      Untuk pertanyaan tentang Ketentuan Layanan ini, hubungi administrator server TDrive Anda atau buat issue di
+      <a href="https://github.com/diona-katzlein/TDrive-TNote/issues" target="_blank" style="color: var(--accent); font-weight: 600;">GitHub Repository</a>.
+    </p>
+  </div>
+
+  <div style="text-align: center; margin-top: 30px; font-size: 13px; color: var(--muted);">
+    <a href="/privacy" style="color: var(--accent); font-weight: 600;">🔒 Baca Kebijakan Privasi</a>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

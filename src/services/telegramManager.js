@@ -35,13 +35,44 @@ function envCredentials() {
   return { apiId, apiHash: String(apiHash) };
 }
 
+/**
+ * RSA Public Key untuk Telegram Test DC.
+ */
+const TEST_DC_PUBLIC_KEY = `-----BEGIN RSA PUBLIC KEY-----
+MIIBCgKCAQEAyMEdY1aR+sCR3ZSJrtztKTKqigvO/vBfqACJLZtS7QMgCGXJ6XIR
+yy7mx66W0/sOFa7/1mAZtEoIokDP3ShoqF4fVNb6XeqgQfaUHd8wJpDWHcR2OFwv
+plUUI1PLTktZ9uW2WE23b+ixNwJjJGwBDJPQEQFBE+vfmH0JP503wr5INS1poWg/
+j25sIWeYPHYeOrFp/eXaqhISP6G+q2IeTaWTXpwZj4LzXq5YOpk4bYEQ6mvRq7D1
+aHWfYmlEGepfaYR8Q0YqvvhYtMte3ITnuSJs171+GDqpdKcSwHnd6FudwGO4pcCO
+j4WcDuXc2CTHgH8gFTNhp/Y8/SpDOhvn9QIDAQAB
+-----END RSA PUBLIC KEY-----`;
+
+/**
+ * Apakah mode Test DC aktif.
+ * Aktifkan via env TDRIVE_USE_TEST_DC=true
+ */
+function isTestDc() {
+  return process.env.TDRIVE_USE_TEST_DC === 'true';
+}
+
 function buildClient(apiId, apiHash, sessionStr = '') {
-  return new TelegramClient(new StringSession(sessionStr), Number(apiId), String(apiHash), {
+  const useTest = isTestDc();
+
+  const client = new TelegramClient(new StringSession(sessionStr), Number(apiId), String(apiHash), {
     connectionRetries: 10,
     requestRetries: 5,
     timeout: 60000, // 60s request timeout
     autoReconnect: true,
+    testServers: useTest,
   });
+
+  // Jika mode test DC aktif, atur DC secara manual ke 149.154.167.40:443 (DC 2 Test)
+  if (useTest && !sessionStr) {
+    client.session.setDC(2, '149.154.167.40', 443);
+    console.log('[Telegram] Menggunakan Test DC: 149.154.167.40:443');
+  }
+
+  return client;
 }
 
 /**
@@ -227,4 +258,6 @@ module.exports = {
   registerClient,
   dropClient,
   cancelLogin,
+  isTestDc,
+  TEST_DC_PUBLIC_KEY,
 };

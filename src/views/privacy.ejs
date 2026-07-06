@@ -1,0 +1,170 @@
+<%- include('partials/header') %>
+
+<style>
+  .legal-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding-bottom: 40px;
+  }
+  .legal-page h1 {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0 0 8px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .legal-page .legal-subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 30px;
+  }
+  .legal-page .legal-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    transition: border-color 0.2s;
+  }
+  .legal-page .legal-card:hover {
+    border-color: var(--accent);
+  }
+  .legal-page .legal-card h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 14px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .legal-page .legal-card p,
+  .legal-page .legal-card li {
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--text);
+    opacity: 0.85;
+  }
+  .legal-page .legal-card ul {
+    padding-left: 20px;
+    margin: 10px 0;
+  }
+  .legal-page .legal-card li {
+    margin-bottom: 6px;
+  }
+  .legal-page .legal-card strong {
+    color: var(--text);
+    opacity: 1;
+  }
+  .legal-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: rgba(88, 166, 255, 0.15);
+    color: var(--accent);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+  }
+</style>
+
+<div class="legal-page">
+  <div class="page-head" style="border: none; margin-bottom: 0; padding-bottom: 0;">
+    <h1>🔒 Kebijakan Privasi</h1>
+    <div class="legal-subtitle">
+      Terakhir diperbarui: Juli 2026 · <span class="legal-badge">v1.0</span>
+    </div>
+  </div>
+
+  <div class="legal-card">
+    <h2>📋 Pendahuluan</h2>
+    <p>
+      Selamat datang di <strong>TDrive & TNote</strong>. Kami menghargai privasi Anda dan berkomitmen untuk melindungi data pribadi yang Anda percayakan kepada kami. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, menyimpan, dan melindungi informasi Anda saat menggunakan layanan kami.
+    </p>
+    <p>
+      Dengan menggunakan TDrive & TNote, Anda menyetujui praktik yang diuraikan dalam kebijakan ini.
+    </p>
+  </div>
+
+  <div class="legal-card">
+    <h2>📊 Informasi yang Kami Kumpulkan</h2>
+    <p>Kami mengumpulkan jenis informasi berikut:</p>
+    <ul>
+      <li><strong>Nomor Telepon Telegram</strong> — Digunakan untuk autentikasi dan identifikasi akun Anda melalui Telegram MTProto API.</li>
+      <li><strong>ID Sesi Telegram (StringSession)</strong> — Disimpan dalam bentuk terenkripsi (AES-256-GCM) di database untuk menjaga koneksi Anda ke Telegram tanpa perlu login ulang.</li>
+      <li><strong>Metadata Berkas</strong> — Nama file, ukuran, tipe MIME, hash SHA-256 untuk verifikasi integritas, dan struktur folder. Konten file sebenarnya tersimpan di server Telegram.</li>
+      <li><strong>Catatan TNote</strong> — Konten catatan Anda yang tersimpan di database server dan juga disinkronkan ke Telegram.</li>
+      <li><strong>Data Audit Trail</strong> — Log aktivitas seperti login, upload, hapus file, dan operasi administratif untuk keamanan dan pemantauan.</li>
+      <li><strong>Informasi MFA/2FA</strong> — Secret key TOTP disimpan terenkripsi jika Anda mengaktifkan autentikasi dua faktor.</li>
+    </ul>
+  </div>
+
+  <div class="legal-card">
+    <h2>🔐 Bagaimana Kami Melindungi Data Anda</h2>
+    <p>Kami menerapkan langkah-langkah keamanan berikut:</p>
+    <ul>
+      <li><strong>Enkripsi End-to-End Sesi</strong> — Semua session string Telegram dienkripsi menggunakan AES-256-GCM dengan master key yang aman sebelum disimpan di database.</li>
+      <li><strong>CSRF Protection</strong> — Token anti-CSRF diterapkan di semua formulir untuk mencegah serangan Cross-Site Request Forgery.</li>
+      <li><strong>Rate Limiting</strong> — Pembatasan laju permintaan untuk mencegah penyalahgunaan API dan serangan brute-force.</li>
+      <li><strong>Honeypot Fields</strong> — Teknik deteksi bot otomatis pada formulir.</li>
+      <li><strong>Hash Kata Sandi</strong> — Kata sandi sistem di-hash menggunakan algoritma kriptografis yang aman (bcrypt/argon2).</li>
+      <li><strong>Zero-Knowledge Search</strong> — Indeks pencarian TNote menggunakan prinsip zero-knowledge agar konten catatan tetap privat.</li>
+    </ul>
+  </div>
+
+  <div class="legal-card">
+    <h2>📤 Penyimpanan dan Transfer Data</h2>
+    <p>
+      Data berkas Anda disimpan secara langsung di akun Telegram Anda sendiri melalui Telegram MTProto API — baik di <strong>Saved Messages</strong> maupun <strong>Private Channel</strong> yang Anda buat. TDrive hanya menyimpan metadata referensi (nama, ukuran, ID pesan Telegram) di database lokal.
+    </p>
+    <p>
+      Ini berarti <strong>Anda memiliki kendali penuh</strong> atas berkas Anda. Jika Anda menghapus akun TDrive, berkas tetap tersedia di Telegram Anda.
+    </p>
+  </div>
+
+  <div class="legal-card">
+    <h2>🤝 Berbagi Data dengan Pihak Ketiga</h2>
+    <p>
+      Kami <strong>tidak menjual, menyewakan, atau membagikan</strong> data pribadi Anda kepada pihak ketiga mana pun. Data Anda hanya diakses oleh:
+    </p>
+    <ul>
+      <li>Anda sendiri, sebagai pemilik akun.</li>
+      <li>Administrator server TDrive (untuk keperluan pemeliharaan teknis).</li>
+      <li>Telegram API (untuk mengirim/menerima berkas dan pesan).</li>
+    </ul>
+  </div>
+
+  <div class="legal-card">
+    <h2>🗑️ Retensi dan Penghapusan Data</h2>
+    <ul>
+      <li>Anda dapat menghapus berkas kapan saja melalui antarmuka TDrive. Berkas yang dihapus dipindahkan ke <strong>Recycle Bin</strong> terlebih dahulu.</li>
+      <li>Data audit trail disimpan untuk keperluan keamanan dan dapat diakses oleh administrator.</li>
+      <li>Untuk menghapus seluruh data Anda, hubungi administrator server untuk menonaktifkan/menghapus akun.</li>
+    </ul>
+  </div>
+
+  <div class="legal-card">
+    <h2>👶 Anak di Bawah Umur</h2>
+    <p>
+      Layanan TDrive & TNote tidak ditujukan untuk anak di bawah usia 13 tahun. Kami tidak secara sengaja mengumpulkan data dari anak-anak. Jika Anda mengetahui bahwa anak di bawah umur menggunakan layanan kami, silakan hubungi administrator.
+    </p>
+  </div>
+
+  <div class="legal-card">
+    <h2>📧 Kontak</h2>
+    <p>
+      Jika Anda memiliki pertanyaan tentang Kebijakan Privasi ini, silakan hubungi administrator server TDrive Anda atau kirim pesan melalui halaman
+      <a href="https://github.com/diona-katzlein/TDrive-TNote/issues" target="_blank" style="color: var(--accent); font-weight: 600;">GitHub Issues</a>.
+    </p>
+  </div>
+
+  <div style="text-align: center; margin-top: 30px; font-size: 13px; color: var(--muted);">
+    <a href="/tos" style="color: var(--accent); font-weight: 600;">📜 Baca Ketentuan Layanan (ToS)</a>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

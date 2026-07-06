@@ -91,6 +91,14 @@ app.use(activeAccount);
 // Rute berbagi publik (akses terbuka untuk umum, tidak masuk requireLogin)
 app.use('/share', shareRouter);
 
+// Halaman legal publik (Privacy Policy & Terms of Service)
+app.get('/privacy', (req, res) => {
+  res.render('privacy', { title: 'Kebijakan Privasi' });
+});
+app.get('/tos', (req, res) => {
+  res.render('tos', { title: 'Ketentuan Layanan' });
+});
+
 // Gerbang: semua di bawah ini wajib login via Telegram
 app.use(requireLogin);
 
