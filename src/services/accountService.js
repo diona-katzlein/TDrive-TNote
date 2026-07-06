@@ -36,14 +36,14 @@ function isPhoneAllowed(phone) {
  * @returns {Promise<object>} row akun
  */
 async function ensureAccountFromLogin(result) {
-  const existing = fileService.getAccountByPhone(result.phone);
+  const existing = await fileService.getAccountByPhone(result.phone);
 
   if (existing) {
     // Login ulang: perbarui StringSession & pasang client ke pool.
     const freshSession = result.client.session.save();
-    fileService.updateAccountSession(existing.id, freshSession);
+    await fileService.updateAccountSession(existing.id, freshSession);
     telegramManager.registerClient(existing.id, result.client);
-    return { account: fileService.getAccount(existing.id), isNew: false };
+    return { account: await fileService.getAccount(existing.id), isNew: false };
   }
 
   // Akun baru: buat channel privat sebagai storage.
@@ -51,7 +51,7 @@ async function ensureAccountFromLogin(result) {
   // Simpan sesi SETELAH channel dibuat agar entity ter-cache di StringSession.
   const sessionStr = result.client.session.save();
 
-  const account = fileService.createAccount({
+  const account = await fileService.createAccount({
     // Label default = nomor telepon; pengguna diminta membuat label setelah login.
     label: result.label || result.phone,
     phone: result.phone,
@@ -61,6 +61,14 @@ async function ensureAccountFromLogin(result) {
     storagePeer: JSON.stringify(peer),
   });
   telegramManager.registerClient(account.id, result.client);
+
+  // Masukkan channel default ini ke user_channels agar terhitung 1/10
+  const db = require('../db');
+  await db.query(
+    'INSERT INTO user_channels (account_id, channel_id, title, created_at) VALUES (?, ?, ?, ?)',
+    [account.id, JSON.stringify(peer), 'TDrive Storage (Default)', Date.now()]
+  );
+
   return { account, isNew: true };
 }
 

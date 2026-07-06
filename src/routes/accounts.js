@@ -174,4 +174,19 @@ router.post('/:id/delete', async (req, res) => {
   }
 });
 
+// Update tipe user (Free / Premium) - Hanya Admin
+router.post('/:id/update-type', async (req, res) => {
+  const id = Number(req.params.id);
+  const { user_type } = req.body;
+  try {
+    if (user_type !== 'Free' && user_type !== 'Premium') {
+      throw new Error('Tipe user tidak valid.');
+    }
+    await db.query('UPDATE accounts SET user_type = ?, updated_at = ? WHERE id = ?', [user_type, Date.now(), id]);
+    res.redirect('/accounts');
+  } catch (err) {
+    res.status(500).send('Gagal merubah tipe akun: ' + err.message);
+  }
+});
+
 module.exports = router;

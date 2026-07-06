@@ -72,6 +72,11 @@ async function renderBrowser(req, res, folderUuid = null) {
       }
     }
 
+    const [channels] = await db.query(
+      'SELECT * FROM user_channels WHERE account_id = ? ORDER BY created_at DESC',
+      [accountId]
+    );
+
     res.render('files/browser', {
       title: currentFolder ? currentFolder.name : 'Drive',
       folders,
@@ -80,6 +85,7 @@ async function renderBrowser(req, res, folderUuid = null) {
       allFolders: await fileService.listAllFolders(accountId),
       stats: await fileService.accountStats(accountId),
       sharesMap,
+      channels,
       query: q,
       notice: req.query.notice || null,
       error: req.query.error || null,
@@ -119,6 +125,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       mime: req.file.mimetype,
       size: req.file.size,
       folderId,
+      storagePeer: req.body.storage_peer || null,
     });
 
     // Jika sudah ada berkas bernama sama, jadikan yang lama sebagai versi riwayat
@@ -137,6 +144,90 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     res.redirect(`${back}${back.includes('?') ? '&' : '?'}error=${encodeURIComponent(err.message)}`);
   } finally {
     if (tempPath) fs.promises.unlink(tempPath).catch(() => {});
+  }
+});
+
+// Chunked Upload (Menghindari limit Cloudflare 100MB)
+const chunkUpload = multer({ dest: path.join(process.cwd(), 'data', 'tmp', 'chunks') });
+router.post('/upload-chunk', chunkUpload.single('chunk'), async (req, res) => {
+  const { chunk_index, total_chunks, upload_id, filename, folder_uuid } = req.body;
+  const chunkFile = req.file;
+
+  try {
+    if (!chunkFile) throw new Error('Berkas chunk kosong.');
+
+    const chunkDir = path.join(process.cwd(), 'data', 'tmp', 'uploads', upload_id);
+    fs.mkdirSync(chunkDir, { recursive: true });
+
+    const chunkPath = path.join(chunkDir, `part_${chunk_index}`);
+    fs.renameSync(chunkFile.path, chunkPath);
+
+    const total = Number(total_chunks);
+    const index = Number(chunk_index);
+
+    // Cek apakah semua chunk sudah terkumpul
+    const files = fs.readdirSync(chunkDir);
+    if (files.length === total) {
+      // Satukan chunks
+      const assembledPath = path.join(process.cwd(), 'data', 'tmp', `${Date.now()}-${filename}`);
+      const writeStream = fs.createWriteStream(assembledPath);
+
+      for (let i = 0; i < total; i++) {
+        const partPath = path.join(chunkDir, `part_${i}`);
+        if (!fs.existsSync(partPath)) {
+          throw new Error(`Chunk part_${i} hilang dari penyimpanan temp.`);
+        }
+        const partData = fs.readFileSync(partPath);
+        writeStream.write(partData);
+        fs.unlinkSync(partPath);
+      }
+      writeStream.end();
+
+      await new Promise((resolve) => writeStream.on('finish', resolve));
+      try {
+        fs.rmdirSync(chunkDir);
+      } catch (_) {}
+
+      try {
+        let folderId = null;
+        if (folder_uuid) {
+          const folder = await fileService.getFolderByUuid(folder_uuid);
+          if (folder && folder.account_id === req.activeAccount.id) {
+            folderId = folder.id;
+          }
+        }
+
+        const existingFile = await fileService.findActiveFileByName(req.activeAccount.id, folderId, filename);
+
+        const uploadedFile = await storageService.uploadFile(req.activeAccount, {
+          tempPath: assembledPath,
+          filename,
+          mime: 'application/octet-stream',
+          size: fs.statSync(assembledPath).size,
+          folderId,
+          storagePeer: req.body.storage_peer || null,
+        });
+
+        if (existingFile) {
+          await db.query('UPDATE files SET parent_file_id = ?, folder_id = NULL WHERE id = ?', [uploadedFile.id, existingFile.id]);
+          await db.query('UPDATE files SET parent_file_id = ? WHERE parent_file_id = ? AND id != ?', [uploadedFile.id, existingFile.id, uploadedFile.id]);
+          await auditService.log(req, 'VERSION_CREATE', `Mengarsipkan versi lama berkas "${filename}" (ID: ${existingFile.id}) menjadi riwayat dari berkas baru (ID: ${uploadedFile.id})`);
+        }
+
+        await auditService.log(req, 'UPLOAD_FILE_CHUNKED', `Mengunggah berkas besar (chunked): ${filename} (${uploadedFile.size} bytes, UUID: ${uploadedFile.uuid})`);
+        fs.unlinkSync(assembledPath);
+
+        return res.json({ success: true, file: uploadedFile });
+      } catch (err) {
+        if (fs.existsSync(assembledPath)) fs.unlinkSync(assembledPath);
+        throw err;
+      }
+    } else {
+      return res.json({ success: true, message: `Chunk ${index + 1}/${total} diterima.` });
+    }
+  } catch (err) {
+    if (chunkFile && fs.existsSync(chunkFile.path)) fs.unlinkSync(chunkFile.path).catch(() => {});
+    return res.status(500).send(err.message);
   }
 });
 

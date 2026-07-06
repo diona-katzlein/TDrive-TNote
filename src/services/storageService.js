@@ -27,12 +27,17 @@ const DL_REQUEST_SIZE = 512 * 1024; // ukuran part unduhan (512 KB)
  * Kembalikan target peer untuk operasi Telegram: 'me' (Saved Messages) atau
  * InputPeerChannel yang direkonstruksi dari storage_peer (JSON channelId+accessHash).
  */
-function resolvePeer(account) {
-  if (!account.storage_peer || account.storage_peer === 'me') return 'me';
+function resolvePeer(account, customPeerStr) {
+  const peerStr = customPeerStr !== undefined ? customPeerStr : (account.storage_peer || 'me');
+  if (!peerStr || peerStr === 'me') return 'me';
   let obj;
   try {
-    obj = JSON.parse(account.storage_peer);
+    obj = JSON.parse(peerStr);
   } catch (_) {
+    // Jika manual username channel (mis. @Film) atau ID mentah (mis. -100xxxx)
+    if (typeof peerStr === 'string' && (peerStr.startsWith('@') || peerStr.startsWith('-'))) {
+      return peerStr;
+    }
     return 'me';
   }
   if (!obj || !obj.channelId) return 'me';
@@ -92,12 +97,12 @@ function writeSlice(srcPath, start, end, destPath) {
  * Upload file dari path temp ke Telegram (chunking bila > CHUNK_SIZE) lalu simpan
  * metadata + mapping ke SQLite.
  * @param {object} account
- * @param {object} opts { tempPath, filename, mime, size, folderId }
+ * @param {object} opts { tempPath, filename, mime, size, folderId, storagePeer }
  */
-async function uploadFile(account, { tempPath, filename, mime, size, folderId }) {
+async function uploadFile(account, { tempPath, filename, mime, size, folderId, storagePeer }) {
   const client = await telegramManager.getClient(account);
-  const peer = resolvePeer(account);
-  const peerStr = account.storage_peer || 'me';
+  const peerStr = storagePeer || account.storage_peer || 'me';
+  const peer = resolvePeer(account, peerStr);
 
   const actualSize = size != null ? Number(size) : fs.statSync(tempPath).size;
   const sha256 = await hashFile(tempPath);
@@ -218,7 +223,7 @@ async function downloadToStream(account, file, writable) {
 async function verifyIntegrity(account, file) {
   const client = await telegramManager.getClient(account);
   const peer = resolvePeer(account);
-  const chunks = fileService.getFileChunks(file.id);
+  const chunks = await fileService.getFileChunks(file.id);
 
   const h = crypto.createHash('sha256');
   let total = 0;
@@ -256,7 +261,7 @@ async function verifyIntegrity(account, file) {
 async function deleteRemote(account, file) {
   const client = await telegramManager.getClient(account);
   const peer = resolvePeer(account);
-  const chunks = fileService.getFileChunks(file.id);
+  const chunks = await fileService.getFileChunks(file.id);
   const ids = chunks.map((c) => c.message_id);
   if (ids.length) {
     try {
@@ -285,10 +290,14 @@ function formatNoteMessage(title, body) {
  * Sinkronkan catatan ke Telegram: kirim pesan baru, atau edit pesan yang ada.
  * @returns {Promise<{messageId:number, peer:string}>}
  */
-async function syncNote(account, { title, body, messageId }) {
+/**
+ * Sinkronkan catatan ke Telegram: kirim pesan baru, atau edit pesan yang ada.
+ * @returns {Promise<{messageId:number, peer:string}>}
+ */
+async function syncNote(account, { title, body, messageId, peerStr }) {
   const client = await telegramManager.getClient(account);
-  const peer = resolvePeer(account);
-  const peerStr = account.storage_peer || 'me';
+  const actualPeerStr = peerStr || account.storage_peer || 'me';
+  const peer = resolvePeer(account, actualPeerStr);
   const text = formatNoteMessage(title, body);
 
   if (messageId) {
@@ -297,7 +306,7 @@ async function syncNote(account, { title, body, messageId }) {
         () => client.editMessage(peer, { message: Number(messageId), text }),
         { label: `note edit ${messageId}` }
       );
-      return { messageId: Number(messageId), peer: peerStr };
+      return { messageId: Number(messageId), peer: actualPeerStr };
     } catch (err) {
       // Pesan lama mungkin terhapus — kirim ulang sebagai pesan baru.
       const msg = (err && (err.errorMessage || err.message)) || '';
@@ -309,14 +318,14 @@ async function syncNote(account, { title, body, messageId }) {
     () => client.sendMessage(peer, { message: text }),
     { label: 'note send' }
   );
-  return { messageId: Number(sent.id), peer: peerStr };
+  return { messageId: Number(sent.id), peer: actualPeerStr };
 }
 
 /** Hapus pesan catatan di Telegram (best-effort). */
-async function deleteNoteMessage(account, messageId) {
+async function deleteNoteMessage(account, messageId, peerStr) {
   if (!messageId) return;
   const client = await telegramManager.getClient(account);
-  const peer = resolvePeer(account);
+  const peer = resolvePeer(account, peerStr);
   try {
     await telegramManager.withFloodRetry(
       () => client.deleteMessages(peer, [Number(messageId)], { revoke: true }),

@@ -159,6 +159,21 @@
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <input type="hidden" name="folder_uuid" value="<%= currentFolder ? currentFolder.uuid : '' %>" />
       <input type="file" name="file" id="fileInput" required />
+      
+      <select name="storage_peer" title="Target Penyimpanan Telegram" style="font-size: 12px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer;">
+        <option value="me" <%= (activeAccount && activeAccount.storage_peer === 'me') ? 'selected' : '' %>>📥 Saved Messages (me)</option>
+        <% channels.forEach(function(c) { %>
+          <% 
+            var displayId = c.channel_id;
+            try {
+              var parsed = JSON.parse(c.channel_id);
+              displayId = parsed.channelId;
+            } catch (_) {}
+          %>
+          <option value="<%= c.channel_id %>" <%= (activeAccount && activeAccount.storage_peer === c.channel_id) ? 'selected' : '' %>><%= c.title %> (ID: <%= displayId %>)</option>
+        <% }); %>
+      </select>
+
       <button class="btn small" type="submit">Upload</button>
     </form>
 
@@ -511,8 +526,6 @@
     if (!fileInput.files || fileInput.files.length === 0) return;
     
     var file = fileInput.files[0];
-    
-    // Terapkan AJAX Upload Progress
     e.preventDefault();
     
     var overlay = document.getElementById('progressOverlay');
@@ -526,66 +539,139 @@
     fileText.innerText = file.name + ' (' + formatSize(file.size) + ')';
     overlay.style.display = 'flex';
 
-    var formData = new FormData(this);
-    var xhr = new XMLHttpRequest();
-    
-    var startTime = Date.now();
-
-    xhr.upload.addEventListener('progress', function(e) {
-      if (e.lengthComputable) {
-        var percent = Math.round((e.loaded / e.total) * 100);
-        bar.style.width = percent + '%';
-        percentText.innerText = percent + '%';
-
-        // Hitung Kecepatan & Estimasi Sisa Waktu
-        var elapsed = (Date.now() - startTime) / 1000; // detik
-        var speed = e.loaded / elapsed; // bytes/sec
-        var speedFormatted = speed > 1024 * 1024 
-          ? (speed / (1024 * 1024)).toFixed(1) + ' MB/s' 
-          : (speed / 1024).toFixed(1) + ' KB/s';
-        
-        speedText.innerText = speedFormatted;
-
-        var remainingBytes = e.total - e.loaded;
-        var remainingTime = speed > 0 ? Math.round(remainingBytes / speed) : 0;
-        
-        if (remainingTime > 60) {
-          timeText.innerText = 'Sisa waktu: ~' + Math.floor(remainingTime / 60) + 'm ' + (remainingTime % 60) + 's';
-        } else {
-          timeText.innerText = 'Sisa waktu: ~' + remainingTime + 's';
-        }
-
-        if (percent === 100) {
-          titleText.innerText = 'Memproses di Telegram...';
-          fileText.innerText = 'Mengupload berkas selesai. Telegram sedang memproses dan memecah (chunking) file Anda. Harap tunggu sebentar...';
-          timeText.innerText = 'Harap tidak menutup halaman ini.';
-          speedText.innerText = '';
-        }
-      }
-    });
-
-    xhr.addEventListener('load', function() {
-      if (xhr.status >= 200 && xhr.status < 400) {
-        // Berhasil, reload halaman untuk menampilkan file baru
-        window.location.reload();
-      } else {
-        alert('Gagal mengunggah file: ' + xhr.responseText);
-        overlay.style.display = 'none';
-      }
-    });
-
-    xhr.addEventListener('error', function() {
-      alert('Terjadi kesalahan koneksi saat mengunggah.');
-      overlay.style.display = 'none';
-    });
-
-    xhr.open('POST', this.action, true);
-    
-    // Kirim CSRF Token via header agar dibaca middleware sebelum multer memproses multipart body
     var csrfToken = this.querySelector('input[name="_csrf"]').value;
-    xhr.setRequestHeader('x-csrf-token', csrfToken);
+    var folderUuid = this.querySelector('input[name="folder_uuid"]').value;
 
-    xhr.send(formData);
+    // Ukuran chunk (50MB agar aman di bawah limit Cloudflare 100MB)
+    var CHUNK_SIZE = 50 * 1024 * 1024;
+    
+    if (file.size <= CHUNK_SIZE) {
+      // Standard upload (tunggal)
+      var formData = new FormData(this);
+      var xhr = new XMLHttpRequest();
+      var startTime = Date.now();
+
+      xhr.upload.addEventListener('progress', function(e) {
+        if (e.lengthComputable) {
+          var percent = Math.round((e.loaded / e.total) * 100);
+          bar.style.width = percent + '%';
+          percentText.innerText = percent + '%';
+          var elapsed = (Date.now() - startTime) / 1000;
+          var speed = e.loaded / elapsed;
+          speedText.innerText = speed > 1024 * 1024 
+            ? (speed / (1024 * 1024)).toFixed(1) + ' MB/s' 
+            : (speed / 1024).toFixed(1) + ' KB/s';
+          var remainingTime = speed > 0 ? Math.round((e.total - e.loaded) / speed) : 0;
+          timeText.innerText = 'Sisa waktu: ~' + remainingTime + 's';
+          if (percent === 100) {
+            titleText.innerText = 'Memproses di Telegram...';
+            fileText.innerText = 'Mengupload berkas selesai. Telegram sedang memproses. Harap tunggu sebentar...';
+            timeText.innerText = 'Harap tidak menutup halaman ini.';
+            speedText.innerText = '';
+          }
+        }
+      });
+      xhr.addEventListener('load', function() {
+        if (xhr.status >= 200 && xhr.status < 400) {
+          window.location.reload();
+        } else {
+          alert('Gagal mengunggah file: ' + xhr.responseText);
+          overlay.style.display = 'none';
+        }
+      });
+      xhr.addEventListener('error', function() {
+        alert('Terjadi kesalahan koneksi saat mengunggah.');
+        overlay.style.display = 'none';
+      });
+      xhr.open('POST', this.action, true);
+      xhr.setRequestHeader('x-csrf-token', csrfToken);
+      xhr.send(formData);
+    } else {
+      // Chunked upload
+      titleText.innerText = 'Mengunggah Berkas Besar (Chunked)...';
+      var totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      var uploadId = 'upload_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+      var chunkIndex = 0;
+      var startTime = Date.now();
+      var storagePeerVal = this.querySelector('select[name="storage_peer"]').value;
+
+      function uploadNextChunk() {
+        if (chunkIndex >= totalChunks) return;
+
+        var start = chunkIndex * CHUNK_SIZE;
+        var end = Math.min(start + CHUNK_SIZE, file.size);
+        var chunk = file.slice(start, end);
+
+        var chunkFormData = new FormData();
+        chunkFormData.append('chunk', chunk);
+        chunkFormData.append('chunk_index', chunkIndex);
+        chunkFormData.append('total_chunks', totalChunks);
+        chunkFormData.append('upload_id', uploadId);
+        chunkFormData.append('filename', file.name);
+        chunkFormData.append('folder_uuid', folderUuid);
+        chunkFormData.append('storage_peer', storagePeerVal);
+        chunkFormData.append('_csrf', csrfToken);
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/drive/upload-chunk', true);
+        xhr.setRequestHeader('x-csrf-token', csrfToken);
+
+        xhr.upload.addEventListener('progress', function(e) {
+          if (e.lengthComputable) {
+            var loadedBytesSoFar = chunkIndex * CHUNK_SIZE + e.loaded;
+            var percent = Math.round((loadedBytesSoFar / file.size) * 100);
+            bar.style.width = percent + '%';
+            percentText.innerText = percent + '%';
+
+            var elapsed = (Date.now() - startTime) / 1000;
+            var speed = loadedBytesSoFar / elapsed;
+            speedText.innerText = speed > 1024 * 1024 
+              ? (speed / (1024 * 1024)).toFixed(1) + ' MB/s' 
+              : (speed / 1024).toFixed(1) + ' KB/s';
+
+            var remainingBytes = file.size - loadedBytesSoFar;
+            var remainingTime = speed > 0 ? Math.round(remainingBytes / speed) : 0;
+            timeText.innerText = 'Sisa waktu: ~' + remainingTime + 's';
+
+            if (percent >= 99) {
+              titleText.innerText = 'Merakit & Memproses di Telegram...';
+              fileText.innerText = 'Seluruh chunk berhasil dikirim. Server sedang merakit file dan memecah (chunking) ke Telegram. Proses ini memerlukan waktu beberapa saat...';
+              timeText.innerText = 'Harap tidak menutup halaman ini.';
+              speedText.innerText = '';
+            }
+          }
+        });
+
+        xhr.addEventListener('load', function() {
+          if (xhr.status >= 200 && xhr.status < 400) {
+            var res = JSON.parse(xhr.responseText);
+            if (res.success) {
+              chunkIndex++;
+              if (chunkIndex < totalChunks) {
+                uploadNextChunk();
+              } else {
+                window.location.reload();
+              }
+            } else {
+              alert('Gagal mengunggah chunk: ' + res.message);
+              overlay.style.display = 'none';
+            }
+          } else {
+            alert('Gagal mengunggah chunk: ' + xhr.responseText);
+            overlay.style.display = 'none';
+          }
+        });
+
+        xhr.addEventListener('error', function() {
+          alert('Terjadi kesalahan koneksi saat mengunggah chunk.');
+          overlay.style.display = 'none';
+        });
+
+        xhr.send(chunkFormData);
+      }
+
+      uploadNextChunk();
+    }
   });
 
   // Helper format size di JS

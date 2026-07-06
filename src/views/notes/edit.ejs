@@ -48,7 +48,7 @@
   }
   .form-row {
     display: grid;
-    grid-template-columns: 1fr 240px;
+    grid-template-columns: 1fr 180px 240px;
     gap: 16px;
   }
   @media (max-width: 600px) {
@@ -200,6 +200,24 @@
             <option value="<%= cat %>"></option>
           <% }); %>
         </datalist>
+      </div>
+
+      <!-- Target Penyimpanan -->
+      <div>
+        <label class="hint" style="display: block; margin-bottom: 6px;">Saluran Target Telegram</label>
+        <select name="storage_peer" class="editor-input" style="cursor: pointer; height: 47px;">
+          <option value="me" <%= (note && note.peer === 'me') ? 'selected' : '' %>>📥 Saved Messages (me)</option>
+          <% channels.forEach(function(c) { %>
+            <% 
+              var displayId = c.channel_id;
+              try {
+                var parsed = JSON.parse(c.channel_id);
+                displayId = parsed.channelId;
+              } catch (_) {}
+            %>
+            <option value="<%= c.channel_id %>" <%= (note && note.peer === c.channel_id) ? 'selected' : '' %>><%= c.title %> (ID: <%= displayId %>)</option>
+          <% }); %>
+        </select>
       </div>
     </div>
 

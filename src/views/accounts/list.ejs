@@ -40,11 +40,13 @@
             <% } %>
           </td>
           <td>
-            <% if (a.user_type === 'Premium') { %>
-              <span class="tag" style="background: var(--accent); color: #fff; font-weight: 700;">🌟 Premium</span>
-            <% } else { %>
-              <span class="tag" style="background: var(--panel-2); border: 1px solid var(--border); color: var(--text);">Free</span>
-            <% } %>
+            <form method="POST" action="/accounts/<%= a.id %>/update-type" style="margin: 0;">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <select name="user_type" onchange="this.form.submit()" style="font-size: 12px; padding: 2px 6px; border-radius: 4px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); font-weight: 600;">
+                <option value="Free" <%= a.user_type === 'Free' ? 'selected' : '' %>>Free</option>
+                <option value="Premium" <%= a.user_type === 'Premium' ? 'selected' : '' %>>Premium 🌟</option>
+              </select>
+            </form>
           </td>
           <td>
             <% if (a.mfa_secret) { %>

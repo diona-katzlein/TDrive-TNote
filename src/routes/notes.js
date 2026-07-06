@@ -42,7 +42,7 @@ async function requireUnlockedNotes(req, res, next) {
  */
 async function trySync(account, note, encryptionKey) {
   try {
-    // Enkripsi payload khusus untuk disimpan sebagai pesan Telegram
+    // Enkripsi kolom data menggunakan kunci E2E
     const encTitle = noteCrypto.encrypt(note.title, encryptionKey);
     const encBody = noteCrypto.encrypt(note.body, encryptionKey);
     const encCategory = noteCrypto.encrypt(note.category || 'General', encryptionKey);
@@ -57,6 +57,7 @@ async function trySync(account, note, encryptionKey) {
       title: 'TNote Encrypted Backup',
       body: payload,
       messageId: note.message_id,
+      peerStr: note.peer || null,
     });
     
     await noteService.setNoteSync(note.id, messageId, peer);
@@ -259,10 +260,16 @@ router.get('/new', async (req, res) => {
     const notes = await noteService.listNotes(req.activeAccount.id, key);
     const categories = [...new Set(notes.map((n) => n.category).filter(Boolean))].sort();
     
+    const [channels] = await db.query(
+      'SELECT * FROM user_channels WHERE account_id = ? ORDER BY created_at DESC',
+      [req.activeAccount.id]
+    );
+
     res.render('notes/edit', {
       title: 'Catatan Baru',
       note: null,
       categories,
+      channels,
       sharesMap: {}, // Catatan baru tidak punya share
       error: null,
       csrfToken: res.locals.csrfToken,
@@ -277,10 +284,11 @@ router.post('/', async (req, res) => {
   const title = (req.body.title || '').trim() || 'Tanpa Judul';
   const body = req.body.body || '';
   const category = (req.body.category || '').trim() || 'General';
+  const storagePeer = req.body.storage_peer || 'me';
   const key = getSessionKey(req);
 
   try {
-    const note = await noteService.createNote(req.activeAccount.id, { title, body, category }, key);
+    const note = await noteService.createNote(req.activeAccount.id, { title, body, category, peer: storagePeer }, key);
     const warn = await trySync(req.activeAccount, note, key);
     
     await auditService.log(req, 'CREATE_NOTE', `Membuat catatan baru: "${title}" (UUID: ${note.uuid})`);
@@ -315,10 +323,16 @@ router.get('/:uuid', async (req, res) => {
       sharesMap[note.id] = shares[0].uuid;
     }
 
+    const [channels] = await db.query(
+      'SELECT * FROM user_channels WHERE account_id = ? ORDER BY created_at DESC',
+      [req.activeAccount.id]
+    );
+
     res.render('notes/edit', {
       title: note.title,
       note,
       categories,
+      channels,
       sharesMap,
       error: null,
       csrfToken: res.locals.csrfToken,
@@ -341,9 +355,10 @@ router.post('/:uuid', async (req, res) => {
     const title = (req.body.title || '').trim() || 'Tanpa Judul';
     const body = req.body.body || '';
     const category = (req.body.category || '').trim() || 'General';
+    const storagePeer = req.body.storage_peer || 'me';
 
     const oldTitle = note.title;
-    await noteService.updateNote(note.id, { title, body, category }, key);
+    await noteService.updateNote(note.id, { title, body, category, peer: storagePeer }, key);
     
     // Perbarui juga data share publik yang terdekripsi (jika ada active share)
     const [shares] = await db.query("SELECT id FROM shares WHERE item_type = 'note' AND item_id = ?", [note.id]);
@@ -375,7 +390,7 @@ router.post('/:uuid/delete', async (req, res) => {
     if (note && note.account_id === req.activeAccount.id) {
       if (note.message_id) {
         try {
-          await storageService.deleteNoteMessage(req.activeAccount, note.message_id);
+          await storageService.deleteNoteMessage(req.activeAccount, note.message_id, note.peer);
         } catch (_) {
           /* abaikan error remote */
         }

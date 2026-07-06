@@ -14,7 +14,7 @@ const now = () => Date.now();
 /**
  * Membuat catatan baru terenkripsi.
  */
-async function createNote(accountId, { title, body, category }, encryptionKey) {
+async function createNote(accountId, { title, body, category, peer }, encryptionKey) {
   const ts = now();
   const u = crypto.randomUUID();
   
@@ -24,8 +24,8 @@ async function createNote(accountId, { title, body, category }, encryptionKey) {
   const encCategory = noteCrypto.encrypt(category || 'General', encryptionKey);
 
   const [result] = await db.query(
-    'INSERT INTO notes (account_id, title, body, category, uuid, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [accountId, encTitle, encBody, encCategory, u, ts, ts]
+    'INSERT INTO notes (account_id, title, body, category, peer, uuid, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [accountId, encTitle, encBody, encCategory, peer || 'me', u, ts, ts]
   );
   return getNote(result.insertId, encryptionKey);
 }
@@ -118,14 +118,14 @@ async function searchNotes(accountId, query, encryptionKey) {
 /**
  * Memperbarui catatan terenkripsi.
  */
-async function updateNote(id, { title, body, category }, encryptionKey) {
+async function updateNote(id, { title, body, category, peer }, encryptionKey) {
   const encTitle = noteCrypto.encrypt(title || 'Tanpa Judul', encryptionKey);
   const encBody = noteCrypto.encrypt(body || '', encryptionKey);
   const encCategory = noteCrypto.encrypt(category || 'General', encryptionKey);
 
   return db.query(
-    'UPDATE notes SET title = ?, body = ?, category = ?, updated_at = ? WHERE id = ?',
-    [encTitle, encBody, encCategory, now(), id]
+    'UPDATE notes SET title = ?, body = ?, category = ?, peer = ?, updated_at = ? WHERE id = ?',
+    [encTitle, encBody, encCategory, peer || 'me', now(), id]
   );
 }
 
