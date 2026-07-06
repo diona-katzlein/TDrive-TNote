@@ -1,0 +1,63 @@
+<%- include('../partials/auth-header') %>
+
+<div class="page-head">
+  <div class="breadcrumb" style="font-size: 15px;">
+    📁 Folder Bersama: <a href="/share/<%= uuid %>" style="font-weight: 700; color: var(--accent);"><%= folder.name %></a>
+    <% if (currentSubfolder) { %>
+      / <span><%= currentSubfolder.name %></span>
+    <% } %>
+  </div>
+</div>
+
+<table class="grid" style="margin-top: 15px;">
+  <thead>
+    <tr><th>Nama</th><th>Ukuran</th><th>Tipe</th><th>Tanggal</th><th>Aksi</th></tr>
+  </thead>
+  <tbody>
+    <% if (currentSubfolder) { %>
+      <tr>
+        <td colspan="5">
+          <% 
+            var backUrl = '/share/' + uuid;
+            if (parentFolderUuid) {
+              backUrl = '/share/' + uuid + '/folder/' + parentFolderUuid;
+            }
+          %>
+          <a class="row-link" href="<%= backUrl %>">⬅ .. (kembali ke folder sebelumnya)</a>
+        </td>
+      </tr>
+    <% } %>
+
+    <!-- Subfolders List -->
+    <% subfolders.forEach(function(sf){ %>
+      <tr>
+        <td><a class="row-link folder" href="/share/<%= uuid %>/folder/<%= sf.uuid %>">📁 <%= sf.name %></a></td>
+        <td>—</td>
+        <td>Folder</td>
+        <td><%= formatDate(sf.created_at) %></td>
+        <td class="actions">
+          <a class="btn small ghost" href="/share/<%= uuid %>/folder/<%= sf.uuid %>">Buka</a>
+        </td>
+      </tr>
+    <% }); %>
+
+    <!-- Files List -->
+    <% files.forEach(function(file){ %>
+      <tr>
+        <td>📄 <%= file.name %></td>
+        <td><%= formatSize(file.size) %></td>
+        <td><%= file.mime || '-' %></td>
+        <td><%= formatDate(file.created_at) %></td>
+        <td class="actions">
+          <a class="btn small" href="/share/<%= uuid %>/file/<%= file.uuid %>/download">Unduh</a>
+        </td>
+      </tr>
+    <% }); %>
+
+    <% if (!subfolders.length && !files.length) { %>
+      <tr><td colspan="5" class="empty-row">Folder ini kosong.</td></tr>
+    <% } %>
+  </tbody>
+</table>
+
+<%- include('../partials/footer') %>

@@ -1,0 +1,29 @@
+<%- include('../partials/header') %>
+
+<div class="page-head">
+  <h1><%= welcome ? 'Login berhasil 🎉' : 'Ubah Label' %></h1>
+</div>
+
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+<div class="card narrow">
+  <p class="hint">
+    <% if (welcome) { %>
+      Akun Telegram <strong><%= account.phone %></strong> berhasil terhubung.
+      Beri nama (label) untuk drive ini agar mudah dikenali.
+    <% } else { %>
+      Beri nama baru untuk drive <strong><%= account.phone %></strong>.
+    <% } %>
+  </p>
+  <form method="POST" action="/accounts/<%= account.id %>/label" class="form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <label>Label Drive
+      <input type="text" name="label" required autofocus
+        value="<%= account.label && account.label !== account.phone ? account.label : '' %>"
+        placeholder="mis. Drive Utama, Arsip Media, Kerja" />
+    </label>
+    <button class="btn" type="submit">Simpan &amp; Buka Drive</button>
+  </form>
+</div>
+
+<%- include('../partials/footer') %>

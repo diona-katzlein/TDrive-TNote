@@ -1,0 +1,74 @@
+<%- include('partials/header') %>
+
+<div class="page-head">
+  <div class="breadcrumb">👤 Profil Saya</div>
+</div>
+
+<% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
+  <!-- Informasi Akun -->
+  <div class="card">
+    <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Informasi Pengguna</h2>
+    <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 15px;">
+      <div>
+        <span class="hint">Nomor Telepon Telegram</span>
+        <div style="font-size: 18px; font-weight: 700; margin-top: 4px;"><%= phone %></div>
+      </div>
+      <div>
+        <span class="hint">Tingkat Akses</span>
+        <div style="margin-top: 6px;">
+          <% if (isAllowed) { %>
+            <span class="status active" style="font-weight: 600;">Admin / Pemilik (Akses Penuh)</span>
+          <% } else { %>
+            <span class="status error" style="font-weight: 600;">Pengguna Biasa (Akses Terbatas)</span>
+          <% } %>
+        </div>
+      </div>
+      <div style="margin-top: 10px; padding: 12px; background: var(--panel-2); border-radius: 8px; border-left: 4px solid var(--accent);">
+        <% if (isAllowed) { %>
+          <p style="margin: 0; font-size: 13px;">Anda memiliki hak akses penuh untuk mengelola server TDrive ini, termasuk menambah, mengaktifkan, dan menghapus akun-akun Telegram di halaman <strong>Accounts</strong>.</p>
+        <% } else { %>
+          <p style="margin: 0; font-size: 13px;">Anda dapat menggunakan Cloud Drive dan TNote pribadi Anda di server ini. Namun, hak akses pengelolaan/pendaftaran akun Telegram di halaman <strong>Accounts</strong> dinonaktifkan untuk akun Anda.</p>
+        <% } %>
+      </div>
+      
+      <div style="margin-top: 15px;">
+        <form method="POST" action="/logout">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <button class="btn danger" style="width: 100%;" type="submit">Keluar dari Sesi (Logout)</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pengaturan Password/PIN -->
+  <div class="card">
+    <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Sandi / PIN Masuk Sistem</h2>
+    <p class="hint">Buat sandi atau PIN sistem agar ketika Anda membuka TDrive dari perangkat/browser lain, Anda cukup mengetikkan sandi ini tanpa perlu meminta OTP Telegram lagi.</p>
+    
+    <form method="POST" action="/profile/password" class="form" style="margin-top: 15px;">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <label>Kata Sandi / PIN Baru
+        <input type="password" name="password" required placeholder="Masukkan kata sandi baru" />
+      </label>
+      <label>Konfirmasi Kata Sandi
+        <input type="password" name="confirm_password" required placeholder="Ketik ulang kata sandi baru" />
+      </label>
+      <button class="btn" type="submit">Simpan Kata Sandi</button>
+    </form>
+    
+    <% if (account && account.password_hash) { %>
+      <div style="margin-top: 15px; text-align: center; color: var(--ok); font-size: 13px; font-weight: 600;">
+        ✓ Akun Anda telah dilindungi dengan Sandi/PIN Masuk.
+      </div>
+    <% } else { %>
+      <div style="margin-top: 15px; text-align: center; color: var(--muted); font-size: 13px;">
+        ⚠ Anda belum mengatur sandi masuk. Login berikutnya pada perangkat baru akan tetap meminta OTP Telegram.
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

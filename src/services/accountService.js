@@ -43,7 +43,7 @@ async function ensureAccountFromLogin(result) {
     const freshSession = result.client.session.save();
     fileService.updateAccountSession(existing.id, freshSession);
     telegramManager.registerClient(existing.id, result.client);
-    return fileService.getAccount(existing.id);
+    return { account: fileService.getAccount(existing.id), isNew: false };
   }
 
   // Akun baru: buat channel privat sebagai storage.
@@ -52,7 +52,8 @@ async function ensureAccountFromLogin(result) {
   const sessionStr = result.client.session.save();
 
   const account = fileService.createAccount({
-    label: result.label,
+    // Label default = nomor telepon; pengguna diminta membuat label setelah login.
+    label: result.label || result.phone,
     phone: result.phone,
     apiId: result.apiId,
     apiHash: result.apiHash,
@@ -60,7 +61,7 @@ async function ensureAccountFromLogin(result) {
     storagePeer: JSON.stringify(peer),
   });
   telegramManager.registerClient(account.id, result.client);
-  return account;
+  return { account, isNew: true };
 }
 
 module.exports = { ensureAccountFromLogin, isPhoneAllowed, normPhone };

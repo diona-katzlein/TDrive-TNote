@@ -18,6 +18,23 @@ const clients = new Map();
 // loginId (string acak) -> { client, phone, phoneCodeHash, apiId, apiHash, label }
 const pendingLogins = new Map();
 
+/**
+ * Kredensial Telegram app bersama (shared) dari environment.
+ * Dipakai agar pengguna cukup memasukkan nomor telepon saat login.
+ * @returns {{apiId:number, apiHash:string}}
+ */
+function envCredentials() {
+  const apiId = Number(process.env.TDRIVE_API_ID);
+  const apiHash = process.env.TDRIVE_API_HASH;
+  if (!apiId || !apiHash) {
+    throw new Error(
+      'TDRIVE_API_ID / TDRIVE_API_HASH belum diset di .env. ' +
+        'Admin perlu membuat app di my.telegram.org lalu mengisinya.'
+    );
+  }
+  return { apiId, apiHash: String(apiHash) };
+}
+
 function buildClient(apiId, apiHash, sessionStr = '') {
   return new TelegramClient(new StringSession(sessionStr), Number(apiId), String(apiHash), {
     connectionRetries: 5,
@@ -98,16 +115,26 @@ async function withFloodRetry(fn, opts = {}) {
  * @returns {Promise<{loginId:string}>}
  */
 async function startLogin({ apiId, apiHash, phone, label }) {
-  const client = buildClient(apiId, apiHash, '');
+  // Bila api_id/api_hash tidak diberikan (login phone-only), pakai kredensial env bersama.
+  const creds = apiId && apiHash ? { apiId: Number(apiId), apiHash: String(apiHash) } : envCredentials();
+
+  const client = buildClient(creds.apiId, creds.apiHash, '');
   await client.connect();
 
   const { phoneCodeHash } = await client.sendCode(
-    { apiId: Number(apiId), apiHash: String(apiHash) },
+    { apiId: creds.apiId, apiHash: creds.apiHash },
     phone
   );
 
   const loginId = crypto.randomBytes(16).toString('hex');
-  pendingLogins.set(loginId, { client, phone, phoneCodeHash, apiId, apiHash, label });
+  pendingLogins.set(loginId, {
+    client,
+    phone,
+    phoneCodeHash,
+    apiId: creds.apiId,
+    apiHash: creds.apiHash,
+    label,
+  });
   return { loginId };
 }
 
@@ -191,6 +218,7 @@ async function cancelLogin(loginId) {
 module.exports = {
   getClient,
   withFloodRetry,
+  envCredentials,
   startLogin,
   completeLogin,
   registerClient,

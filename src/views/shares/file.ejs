@@ -1,0 +1,82 @@
+<%- include('../partials/auth-header') %>
+
+<style>
+  .file-view-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 35px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    margin: 40px auto;
+    max-width: 500px;
+    text-align: center;
+  }
+  .file-icon {
+    font-size: 64px;
+    margin-bottom: 15px;
+  }
+  .file-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 10px 0;
+    word-break: break-all;
+  }
+  .file-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 20px 0;
+    text-align: left;
+    background: var(--panel-2);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .meta-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .meta-value {
+    font-size: 14px;
+    font-weight: 600;
+  }
+</style>
+
+<div class="file-view-card">
+  <div class="file-icon">📄</div>
+  <div class="file-title"><%= file.name %></div>
+  
+  <div class="file-meta-grid">
+    <div class="meta-item">
+      <span class="meta-label">Ukuran Berkas</span>
+      <span class="meta-value"><%= formatSize(file.size) %></span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Tipe Berkas</span>
+      <span class="meta-value" style="word-break: break-all;"><%= file.mime || 'application/octet-stream' %></span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Diunggah</span>
+      <span class="meta-value"><%= formatDate(file.created_at) %></span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Total Dibuka</span>
+      <span class="meta-value"><%= file.downloads || 0 %> kali</span>
+    </div>
+  </div>
+
+  <div style="margin-top: 25px;">
+    <a class="btn" href="/share/<%= uuid %>/download" style="width: 100%; display: block; font-size: 15px; padding: 12px;">
+      ⬇ Unduh Berkas
+    </a>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

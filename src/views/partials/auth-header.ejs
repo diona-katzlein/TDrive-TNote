@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title><%= typeof title !== 'undefined' ? title : 'TDrive' %> · TDrive</title>
+  <title><%= typeof title !== 'undefined' ? title : 'TDrive & TNote' %> · TDrive</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body class="auth-body">
-  <header class="topbar">
-    <a class="brand" href="/login">T<span>Drive</span></a>
+  <header class="topbar" style="justify-content: center;">
+    <a class="brand" href="/login" style="display: flex; align-items: center; gap: 8px;"><img src="/logo.svg" alt="TDrive Logo" style="height: 42px;" /></a>
   </header>
   <main class="container auth-container">

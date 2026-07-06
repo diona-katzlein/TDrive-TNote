@@ -1,0 +1,466 @@
+<%- include('../partials/header') %>
+
+<style>
+  /* Donation Banner */
+  .donation-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    border-left: 4px solid var(--accent);
+  }
+  .donation-links {
+    display: flex;
+    gap: 12px;
+  }
+  .donation-links a {
+    font-weight: 600;
+  }
+
+  .notes-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 28px;
+    align-items: start;
+    margin-top: 20px;
+  }
+  
+  /* Sidebar Kategori */
+  .category-sidebar {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .category-sidebar h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  .category-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .category-item a {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: var(--muted);
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+  .category-item a:hover {
+    background: var(--panel-2);
+    color: var(--text);
+    text-decoration: none;
+  }
+  .category-item.active a {
+    background: var(--accent);
+    color: #fff;
+  }
+  
+  /* Area Catatan */
+  .notes-main {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  /* Grid Catatan */
+  .note-grid-custom {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px;
+  }
+  .note-card-custom {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 220px;
+    position: relative;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .note-card-custom:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+    border-color: var(--accent);
+  }
+  .note-card-custom .note-open {
+    text-decoration: none;
+    color: inherit;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .note-card-custom h3 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .note-card-custom .note-snippet {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .note-card-custom .note-footer {
+    margin-top: 15px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .note-card-custom .note-meta-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .note-card-custom .note-date {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .note-card-custom .note-cat-tag {
+    background: var(--panel-2);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .note-card-custom .note-sync-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dot-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .dot-status.synced { background: var(--ok); }
+  .dot-status.local { background: var(--danger); }
+  .note-card-custom .note-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 480px;
+    padding: 24px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+  }
+  .hp-field {
+    display: none !important;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .notes-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<!-- Donation Banner -->
+<div class="donation-banner">
+  <div>
+    🎁 Dukung pengembangan <strong>TDrive &amp; TNote</strong> agar tetap gratis dan open source!
+  </div>
+  <div class="donation-links">
+    <a href="https://tako.id/IsekaiID/gift" target="_blank">🐙 Tako.ID</a>
+    <a href="https://trakteer.id/isekai_id/gift" target="_blank">☕ Trakteer</a>
+  </div>
+</div>
+
+<div class="page-head">
+  <div class="breadcrumb">📝 TNote <span class="hint">— catatan E2E cloud</span></div>
+  <form method="GET" action="/notes" class="search">
+    <input type="text" name="q" value="<%= query %>" placeholder="Cari catatan..." />
+    <% if (activeCategory) { %>
+      <input type="hidden" name="category" value="<%= activeCategory %>" />
+    <% } %>
+    <button class="btn small ghost">Cari</button>
+  </form>
+</div>
+
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+<% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+
+<div class="toolbar" style="justify-content: space-between; align-items: center;">
+  <div>
+    <a class="btn" href="/notes/new" style="display: flex; align-items: center; gap: 8px;">
+      <span>+</span> Catatan Baru
+    </a>
+  </div>
+  <div class="hint" style="display: flex; align-items: center; gap: 6px;">
+    <span>🔒 Terenkripsi E2E</span>
+  </div>
+</div>
+
+<div class="notes-layout">
+  <!-- Sidebar Kategori -->
+  <aside class="category-sidebar">
+    <h3>Kategori</h3>
+    <ul class="category-list">
+      <li class="category-item <%= !activeCategory ? 'active' : '' %>">
+        <a href="/notes<%= query ? '?q=' + encodeURIComponent(query) : '' %>">
+          <span>Semua Catatan</span>
+        </a>
+      </li>
+      <% categories.forEach(function(cat) { %>
+        <li class="category-item <%= activeCategory === cat ? 'active' : '' %>">
+          <a href="/notes?category=<%= encodeURIComponent(cat) %><%= query ? '&q=' + encodeURIComponent(query) : '' %>">
+            <span><%= cat %></span>
+          </a>
+        </li>
+      <% }); %>
+    </ul>
+  </aside>
+
+  <!-- Area Catatan -->
+  <main class="notes-main">
+    <% if (query) { %>
+      <p class="hint" style="margin: 0;">Hasil pencarian untuk "<strong><%= query %></strong>"<%= activeCategory ? ' di kategori ' + activeCategory : '' %></p>
+    <% } else if (activeCategory) { %>
+      <p class="hint" style="margin: 0;">Menampilkan catatan dalam kategori "<strong><%= activeCategory %></strong>"</p>
+    <% } %>
+
+    <% if (!notes.length) { %>
+      <div class="empty card" style="padding: 60px 20px;">
+        <p style="font-size: 16px; margin-bottom: 12px;">Belum ada catatan.</p>
+        <a class="btn" href="/notes/new">Buat Catatan Pertama</a>
+      </div>
+    <% } else { %>
+      <div class="note-grid-custom">
+        <% notes.forEach(function(n){ %>
+          <div class="note-card-custom">
+            <a class="note-open" href="/notes/<%= n.uuid %>">
+              <h3 id="title-<%= n.uuid %>"><%= n.title %></h3>
+              <p class="note-snippet" id="body-<%= n.uuid %>"><%= (n.body || '') %></p>
+            </a>
+            
+            <div class="note-footer">
+              <div class="note-meta-line">
+                <span class="note-cat-tag" id="cat-<%= n.uuid %>"><%= n.category || 'General' %></span>
+                <div class="note-sync-status" title="<%= n.synced ? 'Tersinkron ke Telegram' : 'Tersimpan lokal' %>">
+                  <span class="note-date" style="margin-right: 6px;"><%= formatDate(n.updated_at) %></span>
+                  <div class="dot-status <%= n.synced ? 'synced' : 'local' %>"></div>
+                </div>
+              </div>
+              
+              <div class="note-actions">
+                <!-- Share Button -->
+                <% if (sharesMap[n.id]) { %>
+                  <button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok); padding: 4px 10px; font-size: 12px;" onclick="showActiveShare('<%= n.title.replace(/'/g, '\\\'') %>', '<%= sharesMap[n.id] %>')">🔗 Tautan Aktif</button>
+                <% } else { %>
+                  <button type="button" class="btn small ghost" style="padding: 4px 10px; font-size: 12px;" onclick="openShareNoteModal('<%= n.uuid %>', '<%= n.title.replace(/'/g, '\\\'') %>')">🔗 Bagikan</button>
+                <% } %>
+
+                <a class="btn small ghost" href="/notes/<%= n.uuid %>" style="padding: 4px 10px; font-size: 12px;">Edit</a>
+                <form method="POST" action="/notes/<%= n.uuid %>/delete" onsubmit="return confirm('Hapus catatan ini?');" style="margin: 0;">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <button class="btn small danger" style="padding: 4px 8px; font-size: 11px;">Hapus</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+  </main>
+</div>
+
+<!-- ---------------------------------------------------- -->
+<!-- MODAL: MEMBAGIKAN CATATAN (SHARED MODAL) -->
+<!-- ---------------------------------------------------- -->
+<div id="shareModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 id="shareTitle">Bagikan Catatan</h3>
+      <button class="modal-close" onclick="closeShareModal()">&times;</button>
+    </div>
+    <form method="POST" action="/share/create" class="form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" name="redirect" id="shareRedirect" />
+      <input type="hidden" name="item_type" value="note" />
+      <input type="hidden" name="item_uuid" id="shareItemUuid" />
+
+      <!-- Payload terdekripsi dikirim ke server untuk share publik -->
+      <input type="hidden" name="shared_title" id="sharedTitle" />
+      <input type="hidden" name="shared_body" id="sharedBody" />
+      <input type="hidden" name="shared_category" id="sharedCategory" />
+
+      <!-- Honeypot -->
+      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+
+      <p class="hint" style="margin-top: 0;">Membagikan: <strong id="shareItemName" style="color: var(--text);">Catatan</strong></p>
+
+      <label>Proteksi Sandi (Opsional)
+        <input type="password" name="password" placeholder="Masukkan kata sandi share" />
+      </label>
+
+      <label>Masa Berlaku (Jam, Opsional)
+        <input type="number" name="expires_in_hours" min="1" placeholder="Mis. 24 (kosong = selamanya)" />
+      </label>
+
+      <label>Batas Maksimal Dibuka (Kali, Opsional)
+        <input type="number" name="max_views" min="1" placeholder="Mis. 5 (kosong = tak terbatas)" />
+      </label>
+
+      <div style="margin-top: 15px; display: flex; gap: 10px;">
+        <button class="btn" type="submit" style="flex: 1;">Buat Tautan Berbagi</button>
+        <button class="btn ghost" type="button" onclick="closeShareModal()">Batal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ---------------------------------------------------- -->
+<!-- MODAL: INFO SHARE TAUTAN AKTIF -->
+<!-- ---------------------------------------------------- -->
+<div id="activeShareModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>🔗 Tautan Berbagi Aktif</h3>
+      <button class="modal-close" onclick="closeActiveShareModal()">&times;</button>
+    </div>
+    <div class="form">
+      <p class="hint" style="margin-top: 0;">Item: <strong id="activeShareItemName" style="color: var(--text);">Catatan</strong></p>
+      
+      <label>Tautan Publik Anda
+        <input type="text" id="activeShareUrl" readonly onclick="this.select();" style="font-family: monospace; font-size: 13px;" />
+      </label>
+      
+      <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button type="button" class="btn" onclick="copyShareUrl()" style="flex: 1;">Salin Tautan</button>
+        
+        <form method="POST" action="" id="revokeShareForm" style="flex: 1; display: flex; margin: 0;">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <input type="hidden" name="redirect" id="revokeRedirect" />
+          <!-- Honeypot -->
+          <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+          <button type="submit" class="btn danger" style="width: 100%;">Tarik Tautan</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var currentUrl = window.location.pathname + window.location.search;
+
+  function openShareNoteModal(uuid, name) {
+    document.getElementById('shareItemUuid').value = uuid;
+    document.getElementById('shareItemName').innerText = name;
+    
+    // Tarik data terdekripsi langsung dari DOM
+    var title = document.getElementById('title-' + uuid).innerText;
+    var body = document.getElementById('body-' + uuid).innerText;
+    var category = document.getElementById('cat-' + uuid).innerText;
+
+    document.getElementById('sharedTitle').value = title;
+    document.getElementById('sharedBody').value = body;
+    document.getElementById('sharedCategory').value = category;
+
+    document.getElementById('shareRedirect').value = currentUrl;
+    document.getElementById('shareModal').style.display = 'flex';
+  }
+
+  function closeShareModal() {
+    document.getElementById('shareModal').style.display = 'none';
+  }
+
+  function showActiveShare(name, shareUuid) {
+    var fullUrl = window.location.origin + '/share/' + shareUuid;
+    document.getElementById('activeShareItemName').innerText = name;
+    document.getElementById('activeShareUrl').value = fullUrl;
+    
+    var form = document.getElementById('revokeShareForm');
+    form.action = '/share/' + shareUuid + '/revoke';
+    document.getElementById('revokeRedirect').value = currentUrl;
+
+    document.getElementById('activeShareModal').style.display = 'flex';
+  }
+
+  function closeActiveShareModal() {
+    document.getElementById('activeShareModal').style.display = 'none';
+  }
+
+  function copyShareUrl() {
+    var input = document.getElementById('activeShareUrl');
+    input.select();
+    document.execCommand('copy');
+    alert('Tautan berhasil disalin ke clipboard!');
+  }
+</script>
+
+<%- include('../partials/footer') %>

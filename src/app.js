@@ -6,16 +6,25 @@ const path = require('path');
 const express = require('express');
 const session = require('express-session');
 
-// Inisialisasi DB (menjalankan migrasi)
-require('./db');
+// Inisialisasi DB (MariaDB Pool)
+const db = require('./db');
 
 const { activeAccount } = require('./middleware/activeAccount');
 const { requireLogin } = require('./middleware/auth');
 const { csrf } = require('./middleware/csrf');
+const { isPhoneAllowed } = require('./services/accountService');
+
+// Middleware Keamanan Baru
+const { globalLimiter, authLimiter } = require('./middleware/rateLimit');
+const honeypot = require('./middleware/honeypot');
+
 const authRouter = require('./routes/auth');
 const accountsRouter = require('./routes/accounts');
 const foldersRouter = require('./routes/folders');
 const filesRouter = require('./routes/files');
+const notesRouter = require('./routes/notes');
+const profileRouter = require('./routes/profile');
+const shareRouter = require('./routes/share');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,8 +33,11 @@ const PORT = process.env.PORT || 3000;
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Middleware dasar
+// Proteksi Laju Permintaan Global & Honeypot
+app.use(globalLimiter);
 app.use(express.urlencoded({ extended: true }));
+app.use(honeypot);
+
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(
   session({
@@ -60,8 +72,14 @@ app.locals.formatDate = function (ms) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
+// Proteksi laju khusus untuk login
+app.use('/login', authLimiter);
+
 // Rute autentikasi (tidak terproteksi): /login, /login/send-code, /login/verify, /logout
 app.use(authRouter);
+
+// Rute berbagi publik (akses terbuka untuk umum, tidak masuk requireLogin)
+app.use('/share', shareRouter);
 
 // Gerbang: semua di bawah ini wajib login via Telegram
 app.use(requireLogin);
@@ -69,15 +87,38 @@ app.use(requireLogin);
 // Sediakan daftar akun + akun aktif ke semua view terproteksi
 app.use(activeAccount);
 
+// Rute Akar (Root Redirect)
+app.get('/', (req, res) => {
+  if (isPhoneAllowed(req.session.userPhone)) {
+    return res.redirect(req.activeAccount ? '/drive' : '/accounts');
+  } else {
+    return res.redirect('/profile');
+  }
+});
+
 // Routes terproteksi
-app.get('/', (req, res) => res.redirect(req.activeAccount ? '/drive' : '/accounts'));
+app.use('/profile', profileRouter);
 app.use('/accounts', accountsRouter);
 app.use('/folders', foldersRouter);
 app.use('/drive', filesRouter);
+app.use('/notes', notesRouter);
 
 // 404
 app.use((req, res) => res.status(404).send('Halaman tidak ditemukan.'));
 
-app.listen(PORT, () => {
-  console.log(`TDrive berjalan di http://localhost:${PORT}`);
-});
+// Mulai Database dan Server secara Asinkron
+async function start() {
+  try {
+    // Jalankan migrasi MariaDB
+    await db.init();
+    
+    app.listen(PORT, () => {
+      console.log(`TDrive berjalan di http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error('Gagal memulai server:', err);
+    process.exit(1);
+  }
+}
+
+start();

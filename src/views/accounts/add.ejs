@@ -8,23 +8,13 @@
 
 <div class="card narrow">
   <p class="hint">
-    Dapatkan <code>api_id</code> dan <code>api_hash</code> dari
-    <a href="https://my.telegram.org" target="_blank" rel="noopener">my.telegram.org</a>
-    (API development tools).
+    Tambahkan akun Telegram lain sebagai drive. Cukup masukkan nomor telepon;
+    kode OTP akan dikirim ke Telegram. Anda akan diminta membuat label setelahnya.
   </p>
   <form method="POST" action="/accounts/send-code" class="form">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-    <label>Label (opsional)
-      <input type="text" name="label" placeholder="Drive Utama" />
-    </label>
-    <label>API ID
-      <input type="number" name="api_id" required placeholder="1234567" />
-    </label>
-    <label>API Hash
-      <input type="text" name="api_hash" required placeholder="abcd1234..." />
-    </label>
     <label>Nomor Telepon
-      <input type="text" name="phone" required placeholder="+62812xxxxxxx" />
+      <input type="text" name="phone" required placeholder="+62812xxxxxxx" autofocus />
     </label>
     <button class="btn" type="submit">Kirim Kode OTP</button>
   </form>

@@ -1,5 +1,141 @@
 <%- include('../partials/header') %>
 
+<style>
+  /* Donation Banner */
+  .donation-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    border-left: 4px solid var(--accent);
+  }
+  .donation-links {
+    display: flex;
+    gap: 12px;
+  }
+  .donation-links a {
+    font-weight: 600;
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 480px;
+    padding: 24px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+  }
+
+  /* Progress Overlay */
+  .progress-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 22, 33, 0.85);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: #fff;
+    padding: 20px;
+  }
+  .progress-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 30px;
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .progress-bar-container {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    height: 20px;
+    width: 100%;
+    overflow: hidden;
+    margin: 20px 0;
+    position: relative;
+  }
+  .progress-bar-fill {
+    background: linear-gradient(90deg, var(--accent), #007ee5);
+    height: 100%;
+    width: 0%;
+    transition: width 0.1s ease;
+  }
+  .progress-text {
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 10px;
+  }
+  .progress-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 12px;
+  }
+
+  /* Honeypot field style */
+  .hp-field {
+    display: none !important;
+  }
+</style>
+
+<!-- Donation Banner -->
+<div class="donation-banner">
+  <div>
+    🎁 Dukung pengembangan <strong>TDrive &amp; TNote</strong> agar tetap gratis dan open source!
+  </div>
+  <div class="donation-links">
+    <a href="https://tako.id/IsekaiID/gift" target="_blank">🐙 Tako.ID</a>
+    <a href="https://trakteer.id/isekai_id/gift" target="_blank">☕ Trakteer</a>
+  </div>
+</div>
+
 <div class="page-head">
   <div class="breadcrumb">
     <a href="/drive">Drive</a>
@@ -15,15 +151,22 @@
 <% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
 
 <div class="toolbar">
-  <form method="POST" action="/drive/upload?_csrf=<%= csrfToken %>" enctype="multipart/form-data" class="inline">
-    <input type="hidden" name="folder_id" value="<%= currentFolder ? currentFolder.id : '' %>" />
-    <input type="file" name="file" required />
-    <button class="btn small">Upload</button>
+  <!-- Upload Form -->
+  <form method="POST" action="/drive/upload" enctype="multipart/form-data" class="inline" id="uploadForm">
+    <!-- Honeypot -->
+    <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="folder_uuid" value="<%= currentFolder ? currentFolder.uuid : '' %>" />
+    <input type="file" name="file" id="fileInput" required />
+    <button class="btn small" type="submit">Upload</button>
   </form>
 
+  <!-- Create Folder Form -->
   <form method="POST" action="/folders" class="inline">
+    <!-- Honeypot -->
+    <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-    <input type="hidden" name="parent_id" value="<%= currentFolder ? currentFolder.id : '' %>" />
+    <input type="hidden" name="parent_uuid" value="<%= currentFolder ? currentFolder.uuid : '' %>" />
     <input type="text" name="name" placeholder="Nama folder baru" required />
     <button class="btn small ghost">+ Folder</button>
   </form>
@@ -35,27 +178,36 @@
 
 <table class="grid">
   <thead>
-    <tr><th>Nama</th><th>Ukuran</th><th>Tipe</th><th>Tanggal</th><th></th></tr>
+    <tr><th>Nama</th><th>Ukuran</th><th>Tipe</th><th>Tanggal</th><th>Aksi</th></tr>
   </thead>
   <tbody>
     <% if (currentFolder) { %>
       <tr>
         <td colspan="5">
-          <a class="row-link" href="/drive<%= currentFolder.parent_id ? '?folder=' + currentFolder.parent_id : '' %>">⬅ .. (folder induk)</a>
+          <a class="row-link" href="<%= currentFolder.parent_id ? '/drive/folder/' + allFolders.find(f => f.id === currentFolder.parent_id).uuid : '/drive' %>">⬅ .. (folder induk)</a>
         </td>
       </tr>
     <% } %>
 
+    <!-- Folders List -->
     <% folders.forEach(function(f){ %>
       <tr>
-        <td><a class="row-link folder" href="/drive?folder=<%= f.id %>">📁 <%= f.name %></a></td>
+        <td><a class="row-link folder" href="/drive/folder/<%= f.uuid %>">📁 <%= f.name %></a></td>
         <td>—</td>
         <td>Folder</td>
         <td><%= formatDate(f.created_at) %></td>
         <td class="actions">
+          <!-- Share Button -->
+          <% if (sharesMap.folder[f.id]) { %>
+            <button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok);" onclick="showActiveShare('<%= f.name.replace(/'/g, '\\\'') %>', '<%= sharesMap.folder[f.id] %>')">🔗 Tautan Aktif</button>
+          <% } else { %>
+            <button type="button" class="btn small ghost" onclick="openShareModal('folder', '<%= f.uuid %>', '<%= f.name.replace(/'/g, '\\\'') %>')">🔗 Bagikan</button>
+          <% } %>
+
           <button type="button" class="btn small ghost"
-            onclick="renameFolder(<%= f.id %>, '<%= f.name.replace(/'/g, "\\'") %>')">Rename</button>
-          <form method="POST" action="/folders/<%= f.id %>/delete" onsubmit="return confirm('Hapus folder & seluruh isinya?');">
+            onclick="renameFolder('<%= f.uuid %>', '<%= f.name.replace(/'/g, "\\'") %>')">Rename</button>
+          
+          <form method="POST" action="/folders/<%= f.uuid %>/delete" onsubmit="return confirm('Hapus folder & seluruh isinya?');">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
             <button class="btn small danger">Hapus</button>
           </form>
@@ -63,6 +215,7 @@
       </tr>
     <% }); %>
 
+    <!-- Files List -->
     <% files.forEach(function(file){ %>
       <tr>
         <td>📄 <%= file.name %><% if (file.is_chunked) { %> <span class="tag">chunked</span><% } %></td>
@@ -70,23 +223,32 @@
         <td><%= file.mime || '-' %></td>
         <td><%= formatDate(file.created_at) %></td>
         <td class="actions">
-          <a class="btn small ghost" href="/drive/<%= file.id %>/download">Unduh</a>
-          <a class="btn small ghost" href="/drive/<%= file.id %>/verify">Verifikasi</a>
-          <button type="button" class="btn small ghost"
-            onclick="renameFile(<%= file.id %>, '<%= file.name.replace(/'/g, "\\'") %>')">Rename</button>
+          <a class="btn small ghost" href="/drive/file/<%= file.uuid %>/download">Unduh</a>
+          
+          <!-- Share Button -->
+          <% if (sharesMap.file[file.id]) { %>
+            <button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok);" onclick="showActiveShare('<%= file.name.replace(/'/g, '\\\'') %>', '<%= sharesMap.file[file.id] %>')">🔗 Tautan Aktif</button>
+          <% } else { %>
+            <button type="button" class="btn small ghost" onclick="openShareModal('file', '<%= file.uuid %>', '<%= file.name.replace(/'/g, '\\\'') %>')">🔗 Bagikan</button>
+          <% } %>
 
-          <form method="POST" action="/drive/<%= file.id %>/move" class="inline">
+          <a class="btn small ghost" href="/drive/file/<%= file.uuid %>/verify">Verifikasi</a>
+          
+          <button type="button" class="btn small ghost"
+            onclick="renameFile('<%= file.uuid %>', '<%= file.name.replace(/'/g, "\\'") %>')">Rename</button>
+
+          <form method="POST" action="/drive/file/<%= file.uuid %>/move" class="inline">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-            <input type="hidden" name="from" value="<%= currentFolder ? currentFolder.id : '' %>" />
-            <select name="folder_id" onchange="this.form.submit()" title="Pindahkan ke folder">
+            <input type="hidden" name="from_uuid" value="<%= currentFolder ? currentFolder.uuid : '' %>" />
+            <select name="folder_uuid" onchange="this.form.submit()" title="Pindahkan ke folder">
               <option value="" <%= !file.folder_id ? 'selected' : '' %>>— (root)</option>
               <% allFolders.forEach(function(af){ %>
-                <option value="<%= af.id %>" <%= file.folder_id === af.id ? 'selected' : '' %>><%= af.name %></option>
+                <option value="<%= af.uuid %>" <%= file.folder_id === af.id ? 'selected' : '' %>><%= af.name %></option>
               <% }); %>
             </select>
           </form>
 
-          <form method="POST" action="/drive/<%= file.id %>/delete" onsubmit="return confirm('Hapus file ini?');">
+          <form method="POST" action="/drive/file/<%= file.uuid %>/delete" onsubmit="return confirm('Hapus file ini?');">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
             <button class="btn small danger">Hapus</button>
           </form>
@@ -104,34 +266,262 @@
   <p class="hint stats">Total: <strong><%= stats.count %></strong> file · <strong><%= formatSize(stats.total) %></strong> terpakai di drive ini.</p>
 <% } %>
 
+<!-- ---------------------------------------------------- -->
+<!-- MODAL: MEMBAGIKAN ITEM (SHARED MODAL) -->
+<!-- ---------------------------------------------------- -->
+<div id="shareModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 id="shareTitle">Bagikan Item</h3>
+      <button class="modal-close" onclick="closeShareModal()">&times;</button>
+    </div>
+    <form method="POST" action="/share/create" class="form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" name="redirect" id="shareRedirect" />
+      <input type="hidden" name="item_type" id="shareItemType" />
+      <input type="hidden" name="item_uuid" id="shareItemUuid" />
+
+      <!-- Honeypot -->
+      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+
+      <p class="hint" style="margin-top: 0;">Membagikan: <strong id="shareItemName" style="color: var(--text);">Item</strong></p>
+
+      <label>Proteksi Sandi (Opsional)
+        <input type="password" name="password" placeholder="Masukkan kata sandi share" />
+      </label>
+
+      <label>Masa Berlaku (Jam, Opsional)
+        <input type="number" name="expires_in_hours" min="1" placeholder="Mis. 24 (kosong = selamanya)" />
+      </label>
+
+      <label>Batas Maksimal Dibuka (Kali, Opsional)
+        <input type="number" name="max_views" min="1" placeholder="Mis. 5 (kosong = tak terbatas)" />
+      </label>
+
+      <div style="margin-top: 15px; display: flex; gap: 10px;">
+        <button class="btn" type="submit" style="flex: 1;">Buat Tautan Berbagi</button>
+        <button class="btn ghost" type="button" onclick="closeShareModal()">Batal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ---------------------------------------------------- -->
+<!-- MODAL: INFO SHARE TAUTAN AKTIF -->
+<!-- ---------------------------------------------------- -->
+<div id="activeShareModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>🔗 Tautan Berbagi Aktif</h3>
+      <button class="modal-close" onclick="closeActiveShareModal()">&times;</button>
+    </div>
+    <div class="form">
+      <p class="hint" style="margin-top: 0;">Item: <strong id="activeShareItemName" style="color: var(--text);">Item</strong></p>
+      
+      <label>Tautan Publik Anda
+        <input type="text" id="activeShareUrl" readonly onclick="this.select();" style="font-family: monospace; font-size: 13px;" />
+      </label>
+      
+      <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button type="button" class="btn" onclick="copyShareUrl()" style="flex: 1;">Salin Tautan</button>
+        
+        <form method="POST" action="" id="revokeShareForm" style="flex: 1; display: flex; margin: 0;">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <input type="hidden" name="redirect" id="revokeRedirect" />
+          <!-- Honeypot -->
+          <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+          <button type="submit" class="btn danger" style="width: 100%;">Tarik Tautan</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------------------------------------------------- -->
+<!-- PROGRESS BAR OVERLAY (UPLOAD ANIMATION) -->
+<!-- ---------------------------------------------------- -->
+<div id="progressOverlay" class="progress-overlay">
+  <div class="progress-box">
+    <h3 style="margin-top: 0;" id="progressTitle">Mengunggah Berkas...</h3>
+    <p class="hint" id="progressFile">file.txt</p>
+    
+    <div class="progress-bar-container">
+      <div class="progress-bar-fill" id="progressBarFill"></div>
+    </div>
+    
+    <div class="progress-text" id="progressPercent">0%</div>
+    
+    <div class="progress-stats">
+      <span id="progressSpeed">0 KB/s</span>
+      <span id="progressTime">Menghitung...</span>
+    </div>
+  </div>
+</div>
+
 <!-- Form tersembunyi untuk rename (diisi via prompt) -->
 <form method="POST" id="renameFileForm" style="display:none">
+  <!-- Honeypot -->
+  <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
   <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
   <input type="hidden" name="name" id="renameFileName" />
 </form>
 <form method="POST" id="renameFolderForm" style="display:none">
+  <!-- Honeypot -->
+  <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
   <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
   <input type="hidden" name="name" id="renameFolderName" />
 </form>
 
 <script>
-  function renameFile(id, current) {
+  // Setup URLs
+  var currentUrl = window.location.pathname + window.location.search;
+
+  function renameFile(uuid, current) {
     var name = window.prompt('Nama baru untuk file:', current);
     if (name && name.trim()) {
       var f = document.getElementById('renameFileForm');
-      f.action = '/drive/' + id + '/rename';
+      f.action = '/drive/file/' + uuid + '/rename';
       document.getElementById('renameFileName').value = name.trim();
       f.submit();
     }
   }
-  function renameFolder(id, current) {
+  
+  function renameFolder(uuid, current) {
     var name = window.prompt('Nama baru untuk folder:', current);
     if (name && name.trim()) {
       var f = document.getElementById('renameFolderForm');
-      f.action = '/folders/' + id + '/rename';
+      f.action = '/folders/' + uuid + '/rename';
       document.getElementById('renameFolderName').value = name.trim();
       f.submit();
     }
+  }
+
+  // --- LOGIKA MODAL SHARING ---
+  function openShareModal(type, uuid, name) {
+    document.getElementById('shareItemType').value = type;
+    document.getElementById('shareItemUuid').value = uuid;
+    document.getElementById('shareItemName').innerText = name;
+    document.getElementById('shareRedirect').value = currentUrl;
+    document.getElementById('shareModal').style.display = 'flex';
+  }
+
+  function closeShareModal() {
+    document.getElementById('shareModal').style.display = 'none';
+  }
+
+  function showActiveShare(name, shareUuid) {
+    var fullUrl = window.location.origin + '/share/' + shareUuid;
+    document.getElementById('activeShareItemName').innerText = name;
+    document.getElementById('activeShareUrl').value = fullUrl;
+    
+    // Setup revoke form
+    var form = document.getElementById('revokeShareForm');
+    form.action = '/share/' + shareUuid + '/revoke';
+    document.getElementById('revokeRedirect').value = currentUrl;
+
+    document.getElementById('activeShareModal').style.display = 'flex';
+  }
+
+  function closeActiveShareModal() {
+    document.getElementById('activeShareModal').style.display = 'none';
+  }
+
+  function copyShareUrl() {
+    var input = document.getElementById('activeShareUrl');
+    input.select();
+    document.execCommand('copy');
+    alert('Tautan berhasil disalin ke clipboard!');
+  }
+
+  // --- LOGIKA PROGRESS BAR UPLOAD AJAX ---
+  document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    var fileInput = document.getElementById('fileInput');
+    if (!fileInput.files || fileInput.files.length === 0) return;
+    
+    var file = fileInput.files[0];
+    
+    // Terapkan AJAX Upload Progress
+    e.preventDefault();
+    
+    var overlay = document.getElementById('progressOverlay');
+    var bar = document.getElementById('progressBarFill');
+    var percentText = document.getElementById('progressPercent');
+    var speedText = document.getElementById('progressSpeed');
+    var timeText = document.getElementById('progressTime');
+    var titleText = document.getElementById('progressTitle');
+    var fileText = document.getElementById('progressFile');
+
+    fileText.innerText = file.name + ' (' + formatSize(file.size) + ')';
+    overlay.style.display = 'flex';
+
+    var formData = new FormData(this);
+    var xhr = new XMLHttpRequest();
+    
+    var startTime = Date.now();
+
+    xhr.upload.addEventListener('progress', function(e) {
+      if (e.lengthComputable) {
+        var percent = Math.round((e.loaded / e.total) * 100);
+        bar.style.width = percent + '%';
+        percentText.innerText = percent + '%';
+
+        // Hitung Kecepatan & Estimasi Sisa Waktu
+        var elapsed = (Date.now() - startTime) / 1000; // detik
+        var speed = e.loaded / elapsed; // bytes/sec
+        var speedFormatted = speed > 1024 * 1024 
+          ? (speed / (1024 * 1024)).toFixed(1) + ' MB/s' 
+          : (speed / 1024).toFixed(1) + ' KB/s';
+        
+        speedText.innerText = speedFormatted;
+
+        var remainingBytes = e.total - e.loaded;
+        var remainingTime = speed > 0 ? Math.round(remainingBytes / speed) : 0;
+        
+        if (remainingTime > 60) {
+          timeText.innerText = 'Sisa waktu: ~' + Math.floor(remainingTime / 60) + 'm ' + (remainingTime % 60) + 's';
+        } else {
+          timeText.innerText = 'Sisa waktu: ~' + remainingTime + 's';
+        }
+
+        if (percent === 100) {
+          titleText.innerText = 'Memproses di Telegram...';
+          fileText.innerText = 'Mengupload berkas selesai. Telegram sedang memproses dan memecah (chunking) file Anda. Harap tunggu sebentar...';
+          timeText.innerText = 'Harap tidak menutup halaman ini.';
+          speedText.innerText = '';
+        }
+      }
+    });
+
+    xhr.addEventListener('load', function() {
+      if (xhr.status >= 200 && xhr.status < 400) {
+        // Berhasil, reload halaman untuk menampilkan file baru
+        window.location.reload();
+      } else {
+        alert('Gagal mengunggah file: ' + xhr.responseText);
+        overlay.style.display = 'none';
+      }
+    });
+
+    xhr.addEventListener('error', function() {
+      alert('Terjadi kesalahan koneksi saat mengunggah.');
+      overlay.style.display = 'none';
+    });
+
+    xhr.open('POST', this.action, true);
+    xhr.send(formData);
+  });
+
+  // Helper format size di JS
+  function formatSize(bytes) {
+    if (bytes == null || isNaN(bytes)) return '-';
+    var units = ['B', 'KB', 'MB', 'GB'];
+    var i = 0;
+    var n = Number(bytes);
+    while (n >= 1024 && i < units.length - 1) {
+      n /= 1024;
+      i++;
+    }
+    return n.toFixed(1) + ' ' + units[i];
   }
 </script>
 

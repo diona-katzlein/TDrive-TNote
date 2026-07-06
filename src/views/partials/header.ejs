@@ -3,15 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title><%= typeof title !== 'undefined' ? title : 'TDrive' %> · TDrive</title>
+  <title><%= typeof title !== 'undefined' ? title : 'TDrive & TNote' %> · TDrive</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/">T<span>Drive</span></a>
+    <a class="brand" href="/" style="display: flex; align-items: center;"><img src="/logo.svg" alt="TDrive Logo" style="height: 36px;" /></a>
     <nav>
       <a href="/drive">Drive</a>
-      <a href="/accounts">Accounts</a>
+      <a href="/notes">TNote</a>
+      <% if (typeof isAdmin !== 'undefined' && isAdmin) { %>
+        <a href="/accounts">Accounts</a>
+      <% } %>
+      <a href="/profile">Profil</a>
     </nav>
     <div class="account-switch">
       <% if (typeof accounts !== 'undefined' && accounts.length) { %>
@@ -26,7 +31,9 @@
           </select>
         </form>
       <% } else { %>
-        <a class="btn small" href="/accounts/add">+ Add Account</a>
+        <% if (typeof isAdmin !== 'undefined' && isAdmin) { %>
+          <a class="btn small" href="/accounts/add">+ Add Account</a>
+        <% } %>
       <% } %>
     </div>
   </header>

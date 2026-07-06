@@ -52,6 +52,21 @@ CREATE TABLE IF NOT EXISTS file_chunks (
   UNIQUE(file_id, part_index)
 );
 
+-- TNote: catatan cloud (isi tersimpan di SQLite + disinkron sebagai pesan Telegram)
+CREATE TABLE IF NOT EXISTS notes (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id    INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  title         TEXT NOT NULL DEFAULT 'Tanpa Judul',
+  body          TEXT NOT NULL DEFAULT '',
+  message_id    INTEGER,                    -- id pesan backup di channel storage (nullable)
+  peer          TEXT DEFAULT 'me',
+  synced        INTEGER NOT NULL DEFAULT 0, -- 1 bila tersinkron ke Telegram
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_notes_account ON notes(account_id, updated_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_files_account_folder ON files(account_id, folder_id);
 CREATE INDEX IF NOT EXISTS idx_files_name ON files(name);
 CREATE INDEX IF NOT EXISTS idx_chunks_file ON file_chunks(file_id, part_index);

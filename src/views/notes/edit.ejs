@@ -1,0 +1,356 @@
+<%- include('../partials/header') %>
+
+<style>
+  /* Donation Banner */
+  .donation-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    border-left: 4px solid var(--accent);
+  }
+  .donation-links {
+    display: flex;
+    gap: 12px;
+  }
+  .donation-links a {
+    font-weight: 600;
+  }
+
+  .editor-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  .editor-header h2 {
+    margin: 0;
+    font-size: 20px;
+  }
+  .editor-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    gap: 16px;
+  }
+  @media (max-width: 600px) {
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+  }
+  .editor-input {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 15px;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+  .editor-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .editor-textarea {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 15px;
+    width: 100%;
+    min-height: 350px;
+    font-family: inherit;
+    line-height: 1.6;
+    resize: vertical;
+    transition: border-color 0.2s;
+  }
+  .editor-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .editor-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 480px;
+    padding: 24px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+  }
+  .hp-field {
+    display: none !important;
+  }
+</style>
+
+<!-- Donation Banner -->
+<div class="donation-banner">
+  <div>
+    🎁 Dukung pengembangan <strong>TDrive &amp; TNote</strong> agar tetap gratis dan open source!
+  </div>
+  <div class="donation-links">
+    <a href="https://tako.id/IsekaiID/gift" target="_blank">🐙 Tako.ID</a>
+    <a href="https://trakteer.id/isekai_id/gift" target="_blank">☕ Trakteer</a>
+  </div>
+</div>
+
+<div class="page-head">
+  <div class="breadcrumb"><a href="/notes">📝 TNote</a> / <span><%= note ? 'Edit Catatan' : 'Catatan Baru' %></span></div>
+</div>
+
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+<div class="editor-card">
+  <div class="editor-header">
+    <h2><%= note ? 'Edit Catatan Anda' : 'Buat Catatan Baru' %></h2>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <!-- Tombol Bagikan jika sedang mengedit catatan -->
+      <% if (note) { %>
+        <% if (sharesMap[note.id]) { %>
+          <button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok); padding: 6px 12px;" onclick="showActiveShare('<%= note.title.replace(/'/g, '\\\'') %>', '<%= sharesMap[note.id] %>')">🔗 Tautan Aktif</button>
+        <% } else { %>
+          <button type="button" class="btn small ghost" style="padding: 6px 12px;" onclick="openShareNoteModal('<%= note.uuid %>', '<%= note.title.replace(/'/g, '\\\'') %>')">🔗 Bagikan</button>
+        <% } %>
+      <% } %>
+      <div class="hint" style="display: flex; align-items: center; gap: 6px;">
+        <span>🔒 Enkripsi E2E Aktif</span>
+      </div>
+    </div>
+  </div>
+
+  <form method="POST" action="<%= note ? '/notes/' + note.uuid : '/notes' %>" class="editor-form" id="noteForm">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    
+    <div class="form-row">
+      <!-- Judul -->
+      <div>
+        <label class="hint" style="display: block; margin-bottom: 6px;">Judul Catatan</label>
+        <input type="text" name="title" id="noteTitle" class="editor-input" placeholder="Judul catatan..."
+          value="<%= note ? note.title : '' %>" autofocus required />
+      </div>
+
+      <!-- Kategori -->
+      <div>
+        <label class="hint" style="display: block; margin-bottom: 6px;">Kategori</label>
+        <input type="text" name="category" id="noteCategory" list="category-options" class="editor-input" 
+          placeholder="General" value="<%= note ? note.category : 'General' %>" />
+        <datalist id="category-options">
+          <% categories.forEach(function(cat) { %>
+            <option value="<%= cat %>"></option>
+          <% }); %>
+        </datalist>
+      </div>
+    </div>
+
+    <!-- Isi Catatan -->
+    <div>
+      <label class="hint" style="display: block; margin-bottom: 6px;">Konten Catatan</label>
+      <textarea name="body" id="noteBody" class="editor-textarea" placeholder="Tulis catatan rahasia Anda di sini..." required><%= note ? note.body : '' %></textarea>
+    </div>
+
+    <div class="editor-actions">
+      <div style="display: flex; gap: 12px;">
+        <button class="btn" type="submit"><%= note ? 'Simpan Perubahan' : 'Buat Catatan' %></button>
+        <a class="btn ghost" href="/notes">Batal</a>
+      </div>
+      
+      <% if (note) { %>
+        <div class="hint">
+          <% if (note.synced) { %>
+            ✓ Tersinkron ke Telegram (Pesan ID: <%= note.message_id %>)
+          <% } else { %>
+            ⚠ Disimpan lokal saja
+          <% } %>
+        </div>
+      <% } %>
+    </div>
+  </form>
+</div>
+
+<!-- ---------------------------------------------------- -->
+<!-- MODAL: MEMBAGIKAN CATATAN (SHARED MODAL) -->
+<!-- ---------------------------------------------------- -->
+<% if (note) { %>
+<div id="shareModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 id="shareTitle">Bagikan Catatan</h3>
+      <button class="modal-close" onclick="closeShareModal()">&times;</button>
+    </div>
+    <form method="POST" action="/share/create" class="form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" name="redirect" id="shareRedirect" />
+      <input type="hidden" name="item_type" value="note" />
+      <input type="hidden" name="item_uuid" id="shareItemUuid" />
+
+      <!-- Payload terdekripsi dikirim ke server untuk share publik -->
+      <input type="hidden" name="shared_title" id="sharedTitle" />
+      <input type="hidden" name="shared_body" id="sharedBody" />
+      <input type="hidden" name="shared_category" id="sharedCategory" />
+
+      <!-- Honeypot -->
+      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+
+      <p class="hint" style="margin-top: 0;">Membagikan: <strong id="shareItemName" style="color: var(--text);">Catatan</strong></p>
+
+      <label>Proteksi Sandi (Opsional)
+        <input type="password" name="password" placeholder="Masukkan kata sandi share" />
+      </label>
+
+      <label>Masa Berlaku (Jam, Opsional)
+        <input type="number" name="expires_in_hours" min="1" placeholder="Mis. 24 (kosong = selamanya)" />
+      </label>
+
+      <label>Batas Maksimal Dibuka (Kali, Opsional)
+        <input type="number" name="max_views" min="1" placeholder="Mis. 5 (kosong = tak terbatas)" />
+      </label>
+
+      <div style="margin-top: 15px; display: flex; gap: 10px;">
+        <button class="btn" type="submit" style="flex: 1;">Buat Tautan Berbagi</button>
+        <button class="btn ghost" type="button" onclick="closeShareModal()">Batal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ---------------------------------------------------- -->
+<!-- MODAL: INFO SHARE TAUTAN AKTIF -->
+<!-- ---------------------------------------------------- -->
+<div id="activeShareModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>🔗 Tautan Berbagi Aktif</h3>
+      <button class="modal-close" onclick="closeActiveShareModal()">&times;</button>
+    </div>
+    <div class="form">
+      <p class="hint" style="margin-top: 0;">Item: <strong id="activeShareItemName" style="color: var(--text);">Catatan</strong></p>
+      
+      <label>Tautan Publik Anda
+        <input type="text" id="activeShareUrl" readonly onclick="this.select();" style="font-family: monospace; font-size: 13px;" />
+      </label>
+      
+      <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button type="button" class="btn" onclick="copyShareUrl()" style="flex: 1;">Salin Tautan</button>
+        
+        <form method="POST" action="" id="revokeShareForm" style="flex: 1; display: flex; margin: 0;">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <input type="hidden" name="redirect" id="revokeRedirect" />
+          <!-- Honeypot -->
+          <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+          <button type="submit" class="btn danger" style="width: 100%;">Tarik Tautan</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var currentUrl = window.location.pathname + window.location.search;
+
+  function openShareNoteModal(uuid, name) {
+    document.getElementById('shareItemUuid').value = uuid;
+    document.getElementById('shareItemName').innerText = name;
+    
+    // Ambil data yang sedang tertulis di input
+    var title = document.getElementById('noteTitle').value;
+    var body = document.getElementById('noteBody').value;
+    var category = document.getElementById('noteCategory').value;
+
+    document.getElementById('sharedTitle').value = title;
+    document.getElementById('sharedBody').value = body;
+    document.getElementById('sharedCategory').value = category;
+
+    document.getElementById('shareRedirect').value = currentUrl;
+    document.getElementById('shareModal').style.display = 'flex';
+  }
+
+  function closeShareModal() {
+    document.getElementById('shareModal').style.display = 'none';
+  }
+
+  function showActiveShare(name, shareUuid) {
+    var fullUrl = window.location.origin + '/share/' + shareUuid;
+    document.getElementById('activeShareItemName').innerText = name;
+    document.getElementById('activeShareUrl').value = fullUrl;
+    
+    var form = document.getElementById('revokeShareForm');
+    form.action = '/share/' + shareUuid + '/revoke';
+    document.getElementById('revokeRedirect').value = currentUrl;
+
+    document.getElementById('activeShareModal').style.display = 'flex';
+  }
+
+  function closeActiveShareModal() {
+    document.getElementById('activeShareModal').style.display = 'none';
+  }
+
+  function copyShareUrl() {
+    var input = document.getElementById('activeShareUrl');
+    input.select();
+    document.execCommand('copy');
+    alert('Tautan berhasil disalin ke clipboard!');
+  }
+</script>
+<% } %>
+
+<%- include('../partials/footer') %>

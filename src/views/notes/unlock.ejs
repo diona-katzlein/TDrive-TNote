@@ -1,0 +1,30 @@
+<%- include('../partials/header') %>
+
+<div class="auth-card card narrow" style="margin: 40px auto;">
+  <h1 style="text-align: center; margin-top: 0;">🔓 Buka Kunci TNote</h1>
+  <p class="hint" style="text-align: center; margin-bottom: 24px;">
+    Masukkan kata sandi catatan Anda untuk mendekripsi dan mengakses catatan (TNote).
+  </p>
+
+  <% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+  <form method="POST" action="/notes/unlock" class="form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <label>Kata Sandi Catatan
+      <input type="password" name="password" required placeholder="Masukkan kata sandi catatan Anda" autofocus />
+    </label>
+    <button class="btn" type="submit">Buka Kunci Catatan</button>
+  </form>
+
+  <hr style="border: 0; border-top: 1px solid var(--border); margin: 30px 0 20px;" />
+
+  <div style="text-align: center;">
+    <p class="hint" style="margin-bottom: 12px;">Lupa kata sandi Anda? Anda dapat mereset sistem catatan.</p>
+    <form method="POST" action="/notes/reset" onsubmit="return confirm('PERINGATAN KERAS:\n\nMelakukan reset catatan akan MENGHAPUS PERMANEN semua catatan lokal dan catatan Anda di Telegram untuk akun ini karena catatan tidak dapat didekripsi tanpa sandi.\n\nApakah Anda yakin ingin melanjutkan reset?');">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <button class="btn danger small" type="submit">Reset Sistem Catatan (Hapus Semua)</button>
+    </form>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

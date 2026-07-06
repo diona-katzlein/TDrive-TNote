@@ -260,6 +260,63 @@ async function deleteRemote(account, file) {
   }
 }
 
+// ---------- TNote sync (catatan sebagai pesan Telegram) ----------
+
+/** Format teks pesan Telegram untuk sebuah catatan. */
+function formatNoteMessage(title, body) {
+  const t = (title || 'Tanpa Judul').trim();
+  const b = (body || '').trim();
+  // Batas pesan teks Telegram ~4096 karakter; potong aman bila melebihi.
+  const text = `📝 ${t}\n\n${b}`;
+  return text.length > 4000 ? text.slice(0, 3990) + '\n…(terpotong)' : text;
+}
+
+/**
+ * Sinkronkan catatan ke Telegram: kirim pesan baru, atau edit pesan yang ada.
+ * @returns {Promise<{messageId:number, peer:string}>}
+ */
+async function syncNote(account, { title, body, messageId }) {
+  const client = await telegramManager.getClient(account);
+  const peer = resolvePeer(account);
+  const peerStr = account.storage_peer || 'me';
+  const text = formatNoteMessage(title, body);
+
+  if (messageId) {
+    try {
+      await telegramManager.withFloodRetry(
+        () => client.editMessage(peer, { message: Number(messageId), text }),
+        { label: `note edit ${messageId}` }
+      );
+      return { messageId: Number(messageId), peer: peerStr };
+    } catch (err) {
+      // Pesan lama mungkin terhapus — kirim ulang sebagai pesan baru.
+      const msg = (err && (err.errorMessage || err.message)) || '';
+      if (!/MESSAGE_ID_INVALID|MESSAGE_EDIT_TIME|not found/i.test(msg)) throw err;
+    }
+  }
+
+  const sent = await telegramManager.withFloodRetry(
+    () => client.sendMessage(peer, { message: text }),
+    { label: 'note send' }
+  );
+  return { messageId: Number(sent.id), peer: peerStr };
+}
+
+/** Hapus pesan catatan di Telegram (best-effort). */
+async function deleteNoteMessage(account, messageId) {
+  if (!messageId) return;
+  const client = await telegramManager.getClient(account);
+  const peer = resolvePeer(account);
+  try {
+    await telegramManager.withFloodRetry(
+      () => client.deleteMessages(peer, [Number(messageId)], { revoke: true }),
+      { label: `note delete ${messageId}` }
+    );
+  } catch (_) {
+    /* abaikan bila sudah tidak ada */
+  }
+}
+
 module.exports = {
   resolvePeer,
   createStorageChannel,
@@ -267,5 +324,7 @@ module.exports = {
   downloadToStream,
   verifyIntegrity,
   deleteRemote,
+  syncNote,
+  deleteNoteMessage,
   CHUNK_SIZE,
 };

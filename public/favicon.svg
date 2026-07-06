@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2ea6ff" />
+      <stop offset="100%" stop-color="#007ee5" />
+    </linearGradient>
+  </defs>
+
+  <!-- Awan Telegram -->
+  <path d="M 50,20 C 35,20 25,32 25,45 C 12,45 2,55 2,68 C 2,80 12,90 25,90 L 75,90 C 88,90 98,80 98,68 C 98,56 88,46 76,45 C 74,28 62,20 50,20 Z" fill="url(#cloudGrad)" />
+  
+  <!-- Gembok Keamanan (E2E) -->
+  <rect x="40" y="55" width="20" height="16" rx="3" fill="#ffffff" />
+  <path d="M 44,55 L 44,49 C 44,45 47,43 50,43 C 53,43 56,45 56,49 L 56,55" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" />
+  <circle cx="50" cy="63" r="2.5" fill="url(#cloudGrad)" />
+</svg>

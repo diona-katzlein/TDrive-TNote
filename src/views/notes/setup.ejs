@@ -1,0 +1,29 @@
+<%- include('../partials/header') %>
+
+<div class="auth-card card narrow" style="margin: 40px auto;">
+  <h1 style="text-align: center; margin-top: 0;">🔒 Aktifkan TNote E2E</h1>
+  <p class="hint" style="text-align: center; margin-bottom: 24px;">
+    Catatan Anda akan dilindungi oleh enkripsi <strong>End-to-End (AES-256-GCM)</strong> secara lokal. 
+    Kunci didekripsi hanya di memori sesi Anda dan tidak pernah dikirimkan ke server.
+  </p>
+
+  <% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+  <form method="POST" action="/notes/setup" class="form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <label>Kata Sandi Catatan Baru
+      <input type="password" name="password" required placeholder="Buat sandi penguncian catatan" minlength="4" autofocus />
+    </label>
+    <label>Konfirmasi Kata Sandi
+      <input type="password" name="confirm_password" required placeholder="Ketik ulang kata sandi" minlength="4" />
+    </label>
+    
+    <div style="margin-top: 10px; padding: 12px; background: rgba(229,72,77,.1); border-radius: 8px; border-left: 4px solid var(--danger); font-size: 12px;">
+      <strong>PENTING:</strong> Catatan ini bersifat <em>Zero-Knowledge</em>. Jika Anda lupa kata sandi ini, catatan Anda tidak akan pernah bisa didekripsi kembali oleh server.
+    </div>
+
+    <button class="btn" style="margin-top: 15px;" type="submit">Aktifkan Enkripsi</button>
+  </form>
+</div>
+
+<%- include('../partials/footer') %>
