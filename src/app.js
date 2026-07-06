@@ -28,6 +28,7 @@ const shareRouter = require('./routes/share');
 const webdavRouter = require('./routes/webdav');
 const workspaceRouter = require('./routes/workspace');
 const auditLogsRouter = require('./routes/auditLogs');
+const backupRouter = require('./routes/backup');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -110,6 +111,7 @@ app.use('/drive', filesRouter);
 app.use('/notes', notesRouter);
 app.use('/workspace', workspaceRouter);
 app.use('/audit-trail-logs', auditLogsRouter);
+app.use('/backup', backupRouter);
 
 // 404
 app.use((req, res) => res.status(404).send('Halaman tidak ditemukan.'));

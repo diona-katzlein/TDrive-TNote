@@ -1,0 +1,245 @@
+<%- include('partials/header') %>
+
+<style>
+  .backup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 768px) {
+    .backup-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .config-table {
+    width: 100%;
+    font-size: 13px;
+    border-collapse: collapse;
+  }
+  .config-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .config-table td:first-child {
+    color: var(--muted);
+    font-weight: 600;
+    width: 140px;
+  }
+  .config-table td:last-child {
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 12px;
+    word-break: break-all;
+  }
+  .backup-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .backup-item {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .backup-item:hover {
+    border-color: var(--accent);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .backup-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .backup-name {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text);
+    word-break: break-all;
+  }
+  .backup-meta {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    gap: 14px;
+  }
+  .backup-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+  }
+  .empty-state .icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+  .btn-backup {
+    background: linear-gradient(135deg, #3fb950 0%, #238636 100%);
+    color: #fff;
+    border: none;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    width: 100%;
+    margin-top: 14px;
+  }
+  .btn-backup:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(63, 185, 80, 0.3);
+  }
+  .btn-backup:active {
+    transform: translateY(0);
+  }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .status-badge.windows {
+    background: rgba(0, 120, 212, 0.15);
+    color: #0078d4;
+    border: 1px solid rgba(0, 120, 212, 0.3);
+  }
+  .status-badge.linux {
+    background: rgba(255, 165, 0, 0.15);
+    color: #f0a020;
+    border: 1px solid rgba(255, 165, 0, 0.3);
+  }
+</style>
+
+<div class="page-head">
+  <div class="breadcrumb">💾 Backup Database</div>
+</div>
+
+<% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+<div class="backup-grid">
+  <!-- Konfigurasi Database -->
+  <div class="card">
+    <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+      Konfigurasi Database
+      <span class="status-badge <%= dbConfig.os === 'Windows' ? 'windows' : 'linux' %>">
+        <%= dbConfig.os === 'Windows' ? '🪟' : '🐧' %> <%= dbConfig.os %>
+      </span>
+    </h2>
+
+    <table class="config-table">
+      <tr><td>Host</td><td><%= dbConfig.host %></td></tr>
+      <tr><td>Port</td><td><%= dbConfig.port %></td></tr>
+      <tr><td>User</td><td><%= dbConfig.user %></td></tr>
+      <tr><td>Database</td><td><%= dbConfig.database %></td></tr>
+      <tr><td>Bin Path</td><td><%= dbConfig.binPath %></td></tr>
+    </table>
+
+    <form method="POST" action="/backup/create" id="backupForm">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <button type="submit" class="btn-backup" id="backupBtn" onclick="this.innerText = '⏳ Memproses Backup...'; this.disabled = true; this.form.submit();">
+        🗄️ Buat Backup Sekarang
+      </button>
+    </form>
+
+    <div style="margin-top: 14px; padding: 12px; background: var(--panel-2); border-radius: 8px; border-left: 4px solid var(--accent); font-size: 12px; color: var(--muted);">
+      <strong style="color: var(--text);">💡 Keterangan:</strong><br>
+      Backup menggunakan <code>mysqldump</code> / <code>mariadb-dump</code> dengan opsi <code>--single-transaction</code> untuk konsistensi data tanpa mengunci tabel. File disimpan di folder <code>data/backups/</code>.
+    </div>
+  </div>
+
+  <!-- Statistik Backup -->
+  <div class="card">
+    <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Ringkasan</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;">
+      <div style="text-align: center; padding: 16px; background: var(--panel-2); border-radius: 10px;">
+        <div style="font-size: 32px; font-weight: 800; color: var(--accent);"><%= backups.length %></div>
+        <div class="hint" style="margin-top: 4px;">Total Backup</div>
+      </div>
+      <div style="text-align: center; padding: 16px; background: var(--panel-2); border-radius: 10px;">
+        <% 
+          var totalSize = backups.reduce(function(sum, b) { return sum + b.size; }, 0);
+          var sizeStr = totalSize > 1024 * 1024 
+            ? (totalSize / (1024 * 1024)).toFixed(1) + ' MB' 
+            : (totalSize / 1024).toFixed(1) + ' KB';
+        %>
+        <div style="font-size: 32px; font-weight: 800; color: var(--text);"><%= sizeStr %></div>
+        <div class="hint" style="margin-top: 4px;">Total Ukuran</div>
+      </div>
+    </div>
+    <% if (backups.length > 0) { %>
+      <div style="margin-top: 16px; text-align: center; font-size: 13px; color: var(--muted);">
+        <%
+          var latestDate = new Date(backups[0].created);
+          var pad = function(x) { return String(x).padStart(2, '0'); };
+          var latestStr = latestDate.getFullYear() + '-' + pad(latestDate.getMonth()+1) + '-' + pad(latestDate.getDate()) + ' ' + pad(latestDate.getHours()) + ':' + pad(latestDate.getMinutes());
+        %>
+        Backup terakhir: <strong style="color: var(--text);"><%= latestStr %></strong>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<!-- Daftar Backup -->
+<div class="card">
+  <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+    📋 Daftar File Backup (<%= backups.length %>)
+  </h2>
+
+  <% if (backups.length === 0) { %>
+    <div class="empty-state">
+      <div class="icon">📂</div>
+      <div style="font-size: 16px; font-weight: 600;">Belum Ada Backup</div>
+      <p class="hint" style="margin-top: 6px;">Klik tombol "Buat Backup Sekarang" untuk membuat backup pertama Anda.</p>
+    </div>
+  <% } else { %>
+    <div class="backup-list" style="margin-top: 14px;">
+      <% backups.forEach(function(b, i) { %>
+        <%
+          var bDate = new Date(b.created);
+          var bStr = bDate.getFullYear() + '-' + pad(bDate.getMonth()+1) + '-' + pad(bDate.getDate()) + ' ' + pad(bDate.getHours()) + ':' + pad(bDate.getMinutes()) + ':' + pad(bDate.getSeconds());
+          var bSize = b.size > 1024 * 1024 
+            ? (b.size / (1024 * 1024)).toFixed(2) + ' MB' 
+            : (b.size / 1024).toFixed(1) + ' KB';
+        %>
+        <div class="backup-item">
+          <div class="backup-info">
+            <div class="backup-name">
+              <% if (i === 0) { %>
+                <span style="color: var(--ok); margin-right: 6px;">●</span>
+              <% } %>
+              <%= b.name %>
+            </div>
+            <div class="backup-meta">
+              <span>📅 <%= bStr %></span>
+              <span>📦 <%= bSize %></span>
+            </div>
+          </div>
+          <div class="backup-actions">
+            <a href="/backup/download/<%= b.name %>" class="btn small" style="padding: 6px 14px; font-size: 12px;" title="Unduh backup">⬇ Unduh</a>
+            <form method="POST" action="/backup/delete/<%= b.name %>" style="margin: 0;" onsubmit="return confirm('Hapus backup ini?');">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <button type="submit" class="btn small danger" style="padding: 6px 10px; font-size: 12px;" title="Hapus backup">🗑</button>
+            </form>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+  <% } %>
+</div>
+
+<%- include('partials/footer') %>

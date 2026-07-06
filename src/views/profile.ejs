@@ -187,15 +187,32 @@
       <h3 class="hint" style="text-transform: uppercase; font-size: 12px; margin-bottom: 10px;">Daftar Private Channel Buatan Anda</h3>
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
         <% channels.forEach(function(c){ %>
-          <div class="channel-card">
-            <div>
-              <strong style="color: var(--text);"><%= c.title %></strong>
-              <div style="color: var(--muted); font-size: 11px; margin-top: 2px;">ID: <%= c.channel_id %></div>
+          <%
+            var displayTitle = c.title;
+            var displayId = c.channel_id;
+            var isDefault = (displayTitle || '').indexOf('Default') !== -1 || (displayTitle || '').indexOf('TDrive Storage') !== -1;
+            try {
+              var parsed = JSON.parse(c.channel_id);
+              displayId = parsed.channelId || c.channel_id;
+            } catch (_) {}
+            var isActive = account && account.storage_peer === c.channel_id;
+          %>
+          <div class="channel-card" style="<%= isActive ? 'border-color: var(--ok); background: rgba(63, 185, 80, 0.05);' : '' %>">
+            <div style="min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <strong style="color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><%= displayTitle %></strong>
+                <% if (isDefault) { %>
+                  <span style="font-size: 10px; background: var(--accent); color: #fff; padding: 1px 6px; border-radius: 10px; font-weight: 600; flex-shrink: 0;">Default</span>
+                <% } %>
+              </div>
+              <div style="color: var(--muted); font-size: 11px; margin-top: 3px; font-family: 'Fira Code', 'Cascadia Code', monospace;">
+                ID: <%= displayId %>
+              </div>
             </div>
-            <% if (account && account.storage_peer === c.channel_id) { %>
-              <span class="tag" style="background: var(--ok); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 20px;">Aktif</span>
+            <% if (isActive) { %>
+              <span class="tag" style="background: var(--ok); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 20px; flex-shrink: 0;">Aktif</span>
             <% } else { %>
-              <form method="POST" action="/profile/storage-peer" style="margin: 0;">
+              <form method="POST" action="/profile/storage-peer" style="margin: 0; flex-shrink: 0;">
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
                 <input type="hidden" name="storage_peer" value="<%= c.channel_id %>" />
                 <button type="submit" class="btn ghost small" style="padding: 2px 8px; font-size: 11px;">Aktifkan</button>
