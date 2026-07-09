@@ -193,20 +193,36 @@
       <!-- Kategori -->
       <div>
         <label class="hint" style="display: block; margin-bottom: 6px;">Kategori</label>
-        <input type="text" name="category" id="noteCategory" list="category-options" class="editor-input" 
-          placeholder="General" value="<%= note ? note.category : 'General' %>" />
-        <datalist id="category-options">
-          <% categories.forEach(function(cat) { %>
-            <option value="<%= cat %>"></option>
-          <% }); %>
-        </datalist>
+        <div style="display: flex; gap: 6px;">
+          <input type="text" name="category" id="noteCategory" list="category-options" class="editor-input" 
+            placeholder="General" value="<%= note ? note.category : 'General' %>" style="flex: 1;" />
+          <datalist id="category-options">
+            <% categories.forEach(function(cat) { %>
+              <option value="<%= cat %>"></option>
+            <% }); %>
+          </datalist>
+        </div>
       </div>
 
-      <!-- Target Penyimpanan -->
+      <!-- Jenis Catatan -->
       <div>
-        <label class="hint" style="display: block; margin-bottom: 6px;">Saluran Target Telegram</label>
-        <select name="storage_peer" class="editor-input" style="cursor: pointer; height: 47px;">
-          <option value="me" <%= (note && note.peer === 'me') ? 'selected' : '' %>>📥 Saved Messages (me)</option>
+        <label class="hint" style="display: block; margin-bottom: 6px;">Jenis Catatan</label>
+        <select name="note_type" class="editor-input" style="cursor: pointer; height: 47px;">
+          <option value="markdown" <%= (note && note.note_type === 'markdown') ? 'selected' : '' %>>📝 Markdown / Teks</option>
+          <option value="cmd" <%= (note && note.note_type === 'cmd') ? 'selected' : '' %>>💻 Script CMD / BAT</option>
+          <option value="bash" <%= (note && note.note_type === 'bash') ? 'selected' : '' %>>🐧 Linux Bash Script</option>
+          <option value="link" <%= (note && note.note_type === 'link') ? 'selected' : '' %>>🔗 Hanya Menyimpan Link (Tautan)</option>
+        </select>
+      </div>
+
+      <!-- Target Penyimpanan (Terkunci sesuai pengaturan Profil) -->
+      <div>
+        <label class="hint" style="display: block; margin-bottom: 6px;">Saluran Target Telegram (Terkunci)</label>
+        <% 
+          var activePeer = (activeAccount && activeAccount.storage_peer) ? activeAccount.storage_peer : 'me'; 
+        %>
+        <select disabled class="editor-input" style="cursor: not-allowed; height: 47px; background: var(--bg); opacity: 0.7;">
+          <option value="me" <%= activePeer === 'me' ? 'selected' : '' %>>📥 Saved Messages (me)</option>
           <% channels.forEach(function(c) { %>
             <% 
               var displayId = c.channel_id;
@@ -215,9 +231,10 @@
                 displayId = parsed.channelId;
               } catch (_) {}
             %>
-            <option value="<%= c.channel_id %>" <%= (note && note.peer === c.channel_id) ? 'selected' : '' %>><%= c.title %> (ID: <%= displayId %>)</option>
+            <option value="<%= c.channel_id %>" <%= activePeer === c.channel_id ? 'selected' : '' %>><%= c.title %> (ID: <%= displayId %>)</option>
           <% }); %>
         </select>
+        <input type="hidden" name="storage_peer" value="<%= activePeer %>" />
       </div>
     </div>
 

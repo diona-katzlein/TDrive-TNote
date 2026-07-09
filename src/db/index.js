@@ -114,6 +114,7 @@ async function init() {
     await ensureColumn('files', 'parent_file_id', 'ALTER TABLE files ADD COLUMN parent_file_id INT DEFAULT NULL, ADD CONSTRAINT fk_files_parent FOREIGN KEY (parent_file_id) REFERENCES files(id) ON DELETE SET NULL');
     await ensureColumn('accounts', 'mfa_secret', 'ALTER TABLE accounts ADD COLUMN mfa_secret VARCHAR(128) DEFAULT NULL');
     await ensureColumn('accounts', 'user_type', 'ALTER TABLE accounts ADD COLUMN user_type VARCHAR(20) DEFAULT "Free"');
+    await ensureColumn('notes', 'note_type', 'ALTER TABLE notes ADD COLUMN note_type VARCHAR(32) DEFAULT "markdown"');
 
     // Perbesar ukuran channel_id di user_channels agar muat JSON string storage peer
     try {

@@ -1,0 +1,102 @@
+<%- include('../partials/header') %>
+
+<div class="page-head">
+  <div>
+    <h1>⚡ TShort Link Shortener</h1>
+    <p class="subtitle" style="color: var(--muted); margin-top: 4px;">Singkatkan tautan TDrive, TNote, atau URL publik lainnya secara instan.</p>
+  </div>
+</div>
+
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+<% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+
+<div class="grid" style="grid-template-columns: 1fr 2fr; gap: 24px; align-items: start;">
+  <!-- Formulir Buat Link Baru -->
+  <div class="card">
+    <h3 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">⚡ Singkatkan Tautan</h3>
+    <form method="POST" action="/shortlink" class="form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      
+      <label>URL Asli (Target)
+        <input type="url" name="original_url" placeholder="https://tdrive.isekai.id/share/..." required style="width: 100%; margin-top: 6px;" />
+      </label>
+
+      <label style="margin-top: 15px; display: block;">Custom Kode (Opsional)
+        <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+          <span style="color: var(--muted); font-size: 13px; font-family: monospace;"><%= domain %>/s/</span>
+          <input type="text" name="custom_code" placeholder="promo2026" style="flex: 1; font-family: monospace;" />
+        </div>
+        <p class="hint" style="margin-top: 4px; font-size: 11px;">Kosongkan jika ingin menghasilkan kode acak 6 digit otomatis.</p>
+      </label>
+
+      <button class="btn" type="submit" style="width: 100%; margin-top: 20px;">⚡ Buat Tautan Singkat</button>
+    </form>
+  </div>
+
+  <!-- Daftar Link Terdaftar -->
+  <div class="card">
+    <h3 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">🔗 Daftar Tautan Singkat</h3>
+    
+    <% if (links.length === 0) { %>
+      <div class="empty-state" style="text-align: center; padding: 40px 20px; color: var(--muted);">
+        <p style="font-size: 16px; margin-bottom: 4px;">Belum ada shortlink.</p>
+        <p style="font-size: 13px;">Gunakan panel kiri untuk mulai menyingkat tautan pertama Anda.</p>
+      </div>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Short URL</th>
+              <th>Tujuan</th>
+              <th style="text-align: center;">Klik</th>
+              <th style="text-align: right;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% links.forEach(function(l) { %>
+              <% var shortUrl = domain + '/s/' + l.short_code; %>
+              <tr>
+                <td>
+                  <a href="<%= shortUrl %>" target="_blank" style="font-weight: 700; font-family: monospace;"><%= l.short_code %></a>
+                </td>
+                <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-family: monospace;" title="<%= l.original_url %>">
+                  <%= l.original_url %>
+                </td>
+                <td style="text-align: center; font-weight: 700; color: var(--accent);"><%= l.clicks %></td>
+                <td style="text-align: right;">
+                  <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                    <button class="btn small ghost" onclick="copyText('<%= shortUrl %>')">Salin</button>
+                    <form method="POST" action="/shortlink/<%= l.id %>/delete" style="margin: 0;" onsubmit="return confirm('Hapus shortlink ini?');">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                      <button class="btn small danger">Hapus</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<script>
+  function copyText(txt) {
+    navigator.clipboard.writeText(txt).then(function() {
+      alert('Tautan disalin ke clipboard!');
+    }).catch(function() {
+      // Fallback
+      var input = document.createElement('input');
+      input.value = txt;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      alert('Tautan disalin ke clipboard!');
+    });
+  }
+</script>
+
+<%- include('../partials/footer') %>

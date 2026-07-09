@@ -576,18 +576,29 @@
             
             // Format t.me/c/ hanya bekerja untuk channel/supergroup.
             // ID channel di database diawali dengan -100 (mis. -1002082218882)
+            var isPublicChannel = false;
+            var channelUsername = '';
+            
             try {
               var parsedPeer = JSON.parse(peerStr);
-              var rawId = String(parsedPeer.channelId || parsedPeer.chatId || '');
-              if (rawId.startsWith('-100')) {
-                cleanChannelId = rawId.substring(4);
-              } else if (rawId.startsWith('-')) {
-                cleanChannelId = rawId.substring(1);
+              if (parsedPeer.username) {
+                isPublicChannel = true;
+                channelUsername = parsedPeer.username;
               } else {
-                cleanChannelId = rawId;
+                var rawId = String(parsedPeer.channelId || parsedPeer.chatId || '');
+                if (rawId.startsWith('-100')) {
+                  cleanChannelId = rawId.substring(4);
+                } else if (rawId.startsWith('-')) {
+                  cleanChannelId = rawId.substring(1);
+                } else {
+                  cleanChannelId = rawId;
+                }
               }
             } catch (_) {
-              if (peerStr.startsWith('-100')) {
+              if (peerStr.startsWith('@')) {
+                isPublicChannel = true;
+                channelUsername = peerStr.substring(1);
+              } else if (peerStr.startsWith('-100')) {
                 cleanChannelId = peerStr.substring(4);
               } else if (peerStr.startsWith('-')) {
                 cleanChannelId = peerStr.substring(1);
@@ -596,7 +607,11 @@
               }
             }
 
-            if (cleanChannelId && cleanChannelId !== 'me' && cleanChannelId !== 'Saved Messages' && cleanChannelId !== 'undefined') {
+            if (isPublicChannel && channelUsername) {
+              var tmeUrl = 'https://t.me/' + channelUsername + '/' + data.message_id;
+              document.getElementById('activeShareTelegramUrl').value = tmeUrl;
+              document.getElementById('telegramShortlinkSection').style.display = 'block';
+            } else if (cleanChannelId && cleanChannelId !== 'me' && cleanChannelId !== 'Saved Messages' && cleanChannelId !== 'undefined') {
               var tmeUrl = 'https://t.me/c/' + cleanChannelId + '/' + data.message_id;
               document.getElementById('activeShareTelegramUrl').value = tmeUrl;
               document.getElementById('telegramShortlinkSection').style.display = 'block';

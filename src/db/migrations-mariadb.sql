@@ -135,4 +135,17 @@ CREATE TABLE IF NOT EXISTS shared_workspaces (
 CREATE INDEX IF NOT EXISTS idx_user_channels_account ON user_channels(account_id);
 CREATE INDEX IF NOT EXISTS idx_shared_workspaces_target ON shared_workspaces(target_phone);
 
+-- Tabel shortlinks untuk modul TShort
+CREATE TABLE IF NOT EXISTS shortlinks (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  account_id  INT NOT NULL,
+  short_code  VARCHAR(50) NOT NULL UNIQUE,
+  original_url TEXT NOT NULL,
+  clicks      INT DEFAULT 0,
+  created_at  BIGINT NOT NULL,
+  CONSTRAINT fk_shortlinks_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX IF NOT EXISTS idx_shortlinks_code ON shortlinks(short_code);
+
 

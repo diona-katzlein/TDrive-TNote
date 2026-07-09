@@ -300,46 +300,183 @@
         <a class="btn" href="/notes/new">Buat Catatan Pertama</a>
       </div>
     <% } else { %>
-      <div class="note-grid-custom">
-        <% notes.forEach(function(n){ %>
-          <div class="note-card-custom">
-            <a class="note-open" href="/notes/<%= n.uuid %>">
-              <h3 id="title-<%= n.uuid %>"><%= n.title %></h3>
-              <p class="note-snippet" id="body-<%= n.uuid %>"><%= (n.body || '') %></p>
-            </a>
-            
-            <div class="note-footer">
-              <div class="note-meta-line">
-                <span class="note-cat-tag" id="cat-<%= n.uuid %>"><%= n.category || 'General' %></span>
-                <div class="note-sync-status" title="<%= n.synced ? 'Tersinkron ke Telegram' : 'Tersimpan lokal' %>">
-                  <span class="note-date" style="margin-right: 6px;"><%= formatDate(n.updated_at) %></span>
-                  <div class="dot-status <%= n.synced ? 'synced' : 'local' %>"></div>
-                </div>
-              </div>
-              
-              <div class="note-actions">
-                <!-- Share Button -->
-                <% if (sharesMap[n.id]) { %>
-                  <button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok); padding: 4px 10px; font-size: 12px;" onclick="showActiveShare('<%= n.title.replace(/'/g, '\\\'') %>', '<%= sharesMap[n.id] %>')">🔗 Tautan Aktif</button>
-                <% } else { %>
-                  <button type="button" class="btn small ghost" style="padding: 4px 10px; font-size: 12px;" onclick="openShareNoteModal('<%= n.uuid %>', '<%= n.title.replace(/'/g, '\\\'') %>')">🔗 Bagikan</button>
-                <% } %>
-
-                <button type="button" class="btn small ghost" style="padding: 4px 10px; font-size: 12px;" onclick="openWorkspaceModal('note', '<%= n.uuid %>', '<%= n.title.replace(/'/g, '\\\'') %>')">👥 Kolaborasi</button>
-
-                <a class="btn small ghost" href="/notes/<%= n.uuid %>" style="padding: 4px 10px; font-size: 12px;">Edit</a>
-                <form method="POST" action="/notes/<%= n.uuid %>/delete" onsubmit="return confirm('Hapus catatan ini?');" style="margin: 0;">
-                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                  <button class="btn small danger" style="padding: 4px 8px; font-size: 11px;">Hapus</button>
-                </form>
-              </div>
-            </div>
-          </div>
-        <% }); %>
+      <!-- Container Grid Catatan Dinamis -->
+      <div id="notesContainer" class="note-grid-custom">
+        <!-- Catatan disuntikkan secara dinamis via Javascript -->
+      </div>
+      
+      <!-- Loader Indicator -->
+      <div id="lazyLoaderIndicator" style="text-align: center; padding: 20px; color: var(--muted); display: none; font-size: 13px;">
+        🔄 Memuat catatan lainnya...
       </div>
     <% } %>
   </main>
 </div>
+
+<script>
+  // Inject data catatan yang sudah terdekripsi dari server
+  var allNotes = <%- JSON.stringify(notes) %>;
+  var sharesMap = <%- JSON.stringify(sharesMap) %>;
+  
+  var currentIndex = 0;
+  var limit = 10;
+  var isLoading = false;
+  
+  function getNoteTypeBadge(type) {
+    if (type === 'cmd') return '<span class="note-cat-tag" style="background: #1e1e24; color: #ffb703; border-color: #ffb703;">💻 CMD</span>';
+    if (type === 'bash') return '<span class="note-cat-tag" style="background: #0f1c11; color: #39ff14; border-color: #39ff14;">🐧 Bash</span>';
+    if (type === 'link') return '<span class="note-cat-tag" style="background: #171c26; color: #2ea6ff; border-color: #2ea6ff;">🔗 Link</span>';
+    return '<span class="note-cat-tag" style="background: var(--panel-2); color: var(--accent);">📝 Note</span>';
+  }
+
+  function getNoteContentMarkup(note) {
+    if (note.note_type === 'link') {
+      var url = note.body ? note.body.trim() : '#';
+      // Pastikan ada skema protocol
+      if (url !== '#' && !/^https?:\/\//i.test(url)) {
+        url = 'https://' + url;
+      }
+      return '<div style="margin-top: 10px; padding: 12px; background: var(--bg); border: 1px dashed var(--border); border-radius: 6px; text-align: center;">' +
+             '  <a class="btn small" href="' + url + '" target="_blank" style="display: inline-block; font-weight: 700;">🔗 Buka Tautan Eksternal</a>' +
+             '  <p style="margin: 6px 0 0 0; font-size: 11px; color: var(--muted); word-break: break-all; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + url + '</p>' +
+             '</div>';
+    }
+    
+    // Snippet biasa
+    var text = note.body || '';
+    var escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    return '<p class="note-snippet">' + escaped + '</p>';
+  }
+
+  function renderNextNotes() {
+    if (currentIndex >= allNotes.length) return;
+    isLoading = true;
+    document.getElementById('lazyLoaderIndicator').style.display = 'block';
+    
+    var container = document.getElementById('notesContainer');
+    var end = Math.min(currentIndex + limit, allNotes.length);
+    
+    for (var i = currentIndex; i < end; i++) {
+      var n = allNotes[i];
+      var shareBtnHtml = '';
+      if (sharesMap[n.id]) {
+        shareBtnHtml = '<button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok); padding: 4px 10px; font-size: 12px;" onclick="showActiveShare(\'' + n.title.replace(/'/g, "\\'") + '\', \'' + sharesMap[n.id] + '\')">🔗 Tautan Aktif</button>';
+      } else {
+        shareBtnHtml = '<button type="button" class="btn small ghost" style="padding: 4px 10px; font-size: 12px;" onclick="openShareNoteModal(\'' + n.uuid + '\', \'' + n.title.replace(/'/g, "\\'") + '\')">🔗 Bagikan</button>';
+      }
+      
+      var card = document.createElement('div');
+      card.className = 'note-card-custom';
+      
+      var syncDotClass = n.synced ? 'synced' : 'local';
+      var formattedDate = new Date(n.updated_at).toLocaleString('id-ID', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      
+      card.innerHTML = 
+        '<a class="note-open" href="/notes/' + n.uuid + '">' +
+        '  <h3>' + n.title + '</h3>' +
+        '</a>' +
+        getNoteContentMarkup(n) +
+        '<div class="note-footer">' +
+        '  <div class="note-meta-line">' +
+        '    <div style="display: flex; gap: 6px; align-items: center;">' +
+               getNoteTypeBadge(n.note_type) + 
+        '      <span class="note-cat-tag">' + (n.category || 'General') + '</span>' +
+        '    </div>' +
+        '    <div class="note-sync-status" title="' + (n.synced ? 'Tersinkron ke Telegram' : 'Tersimpan lokal') + '">' +
+        '      <span class="note-date" style="margin-right: 6px;">' + formattedDate + '</span>' +
+        '      <div class="dot-status ' + syncDotClass + '"></div>' +
+        '    </div>' +
+        '  </div>' +
+        '  <div class="note-actions">' +
+             shareBtnHtml +
+        '    <a class="btn small ghost" href="/notes/' + n.uuid + '" style="padding: 4px 10px; font-size: 12px;">Edit</a>' +
+        '    <form method="POST" action="/notes/' + n.uuid + '/delete" onsubmit="return confirm(\'Hapus catatan ini?\');" style="margin: 0;">' +
+        '      <input type="hidden" name="_csrf" value="' + '<%= csrfToken %>' + '" />' +
+        '      <button class="btn small danger" style="padding: 4px 8px; font-size: 11px;">Hapus</button>' +
+        '    </form>' +
+        '  </div>' +
+        '</div>';
+        
+      container.appendChild(card);
+    }
+    
+    currentIndex = end;
+    isLoading = false;
+    document.getElementById('lazyLoaderIndicator').style.display = 'none';
+  }
+
+  // Handle client-side live search filter
+  function performClientSearch(query) {
+    var q = query.toLowerCase().trim();
+    var filtered = allNotes.filter(function(n) {
+      return (n.title || '').toLowerCase().includes(q) || 
+             (n.body || '').toLowerCase().includes(q) || 
+             (n.category || '').toLowerCase().includes(q);
+    });
+    
+    // Clear container
+    var container = document.getElementById('notesContainer');
+    if (container) {
+      container.innerHTML = '';
+      
+      // Render filtered notes (tidak menggunakan lazy load untuk search agar instan)
+      filtered.forEach(function(n) {
+        var shareBtnHtml = '';
+        if (sharesMap[n.id]) {
+          shareBtnHtml = '<button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok); padding: 4px 10px; font-size: 12px;" onclick="showActiveShare(\'' + n.title.replace(/'/g, "\\'") + '\', \'' + sharesMap[n.id] + '\')">🔗 Tautan Aktif</button>';
+        } else {
+          shareBtnHtml = '<button type="button" class="btn small ghost" style="padding: 4px 10px; font-size: 12px;" onclick="openShareNoteModal(\'' + n.uuid + '\', \'' + n.title.replace(/'/g, "\\'") + '\')">🔗 Bagikan</button>';
+        }
+        
+        var card = document.createElement('div');
+        card.className = 'note-card-custom';
+        var syncDotClass = n.synced ? 'synced' : 'local';
+        var formattedDate = new Date(n.updated_at).toLocaleString('id-ID', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        
+        card.innerHTML = 
+          '<a class="note-open" href="/notes/' + n.uuid + '">' +
+          '  <h3>' + n.title + '</h3>' +
+          '</a>' +
+          getNoteContentMarkup(n) +
+          '<div class="note-footer">' +
+          '  <div class="note-meta-line">' +
+          '    <div style="display: flex; gap: 6px; align-items: center;">' +
+                 getNoteTypeBadge(n.note_type) + 
+          '      <span class="note-cat-tag">' + (n.category || 'General') + '</span>' +
+          '    </div>' +
+          '    <div class="note-sync-status" title="' + (n.synced ? 'Tersinkron ke Telegram' : 'Tersimpan lokal') + '">' +
+          '      <span class="note-date" style="margin-right: 6px;">' + formattedDate + '</span>' +
+          '      <div class="dot-status ' + syncDotClass + '"></div>' +
+          '    </div>' +
+          '  </div>' +
+          '  <div class="note-actions">' +
+               shareBtnHtml +
+          '    <a class="btn small ghost" href="/notes/' + n.uuid + '" style="padding: 4px 10px; font-size: 12px;">Edit</a>' +
+          '    <form method="POST" action="/notes/' + n.uuid + '/delete" onsubmit="return confirm(\'Hapus catatan ini?\');" style="margin: 0;">' +
+          '      <input type="hidden" name="_csrf" value="' + '<%= csrfToken %>' + '" />' +
+          '      <button class="btn small danger" style="padding: 4px 8px; font-size: 11px;">Hapus</button>' +
+          '    </form>' +
+          '  </div>' +
+          '</div>';
+        container.appendChild(card);
+      });
+    }
+  }
+
+  // Load first set on DOM ready
+  window.addEventListener('DOMContentLoaded', function() {
+    renderNextNotes();
+    
+    // Scroll listener for infinite lazy load
+    window.addEventListener('scroll', function() {
+      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150) {
+        if (!isLoading && currentIndex < allNotes.length) {
+          renderNextNotes();
+        }
+      }
+    });
+  });
+</script>
 
 <!-- ---------------------------------------------------- -->
 <!-- MODAL: MEMBAGIKAN CATATAN (SHARED MODAL) -->

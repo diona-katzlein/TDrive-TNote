@@ -29,6 +29,7 @@ const webdavRouter = require('./routes/webdav');
 const workspaceRouter = require('./routes/workspace');
 const auditLogsRouter = require('./routes/auditLogs');
 const backupRouter = require('./routes/backup');
+const shortlinkRouter = require('./routes/shortlink');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -107,6 +108,26 @@ app.get('/guide', (req, res) => {
   res.render('guide', { title: 'Panduan Penggunaan' });
 });
 
+// REDIRECT BYPASS PUBLIC UNTUK SHORTLINK (TShort)
+app.get('/s/:code', async (req, res) => {
+  const { code } = req.params;
+  try {
+    const [rows] = await db.query('SELECT * FROM shortlinks WHERE short_code = ?', [code]);
+    const link = rows[0];
+    if (!link) {
+      return res.status(404).send('Shortlink tidak ditemukan atau telah kadaluwarsa.');
+    }
+
+    // Naikkan jumlah klik secara asinkron
+    await db.query('UPDATE shortlinks SET clicks = clicks + 1 WHERE id = ?', [link.id]);
+    
+    // Redirect ke URL asli
+    res.redirect(link.original_url);
+  } catch (err) {
+    res.status(500).send('Terjadi kesalahan pengalihan.');
+  }
+});
+
 // Gerbang: semua di bawah ini wajib login via Telegram
 app.use(requireLogin);
 
@@ -125,6 +146,7 @@ app.use('/accounts', accountsRouter);
 app.use('/folders', foldersRouter);
 app.use('/drive', filesRouter);
 app.use('/notes', notesRouter);
+app.use('/shortlink', shortlinkRouter);
 // app.use('/workspace', workspaceRouter);
 app.use('/audit-trail-logs', auditLogsRouter);
 app.use('/backup', backupRouter);

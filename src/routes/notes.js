@@ -292,11 +292,13 @@ router.post('/', async (req, res) => {
   const title = (req.body.title || '').trim() || 'Tanpa Judul';
   const body = req.body.body || '';
   const category = (req.body.category || '').trim() || 'General';
-  const storagePeer = req.body.storage_peer || 'me';
+  const note_type = req.body.note_type || 'markdown';
+  // Kunci otomatis ke storage peer active account
+  const storagePeer = req.activeAccount.storage_peer || 'me';
   const key = getSessionKey(req);
 
   try {
-    const note = await noteService.createNote(req.activeAccount.id, { title, body, category, peer: storagePeer }, key);
+    const note = await noteService.createNote(req.activeAccount.id, { title, body, category, peer: storagePeer, note_type }, key);
     const warn = await trySync(req.activeAccount, note, key);
     
     await auditService.log(req, 'CREATE_NOTE', `Membuat catatan baru: "${title}" (UUID: ${note.uuid})`);
@@ -371,10 +373,12 @@ router.post('/:uuid', async (req, res) => {
     const title = (req.body.title || '').trim() || 'Tanpa Judul';
     const body = req.body.body || '';
     const category = (req.body.category || '').trim() || 'General';
-    const storagePeer = req.body.storage_peer || 'me';
+    const note_type = req.body.note_type || 'markdown';
+    // Kunci otomatis ke storage peer active account
+    const storagePeer = req.activeAccount.storage_peer || 'me';
 
     const oldTitle = note.title;
-    await noteService.updateNote(note.id, { title, body, category, peer: storagePeer }, key);
+    await noteService.updateNote(note.id, { title, body, category, peer: storagePeer, note_type }, key);
     
     // Perbarui juga data share publik yang terdekripsi (jika ada active share)
     const [shares] = await db.query("SELECT id FROM shares WHERE item_type = 'note' AND item_id = ?", [note.id]);
