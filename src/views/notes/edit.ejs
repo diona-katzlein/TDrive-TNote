@@ -347,6 +347,7 @@
       
       <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
         <button type="button" class="btn" onclick="copyShareUrl()" style="flex: 1; min-width: 120px;">Salin Tautan</button>
+        <button type="button" id="copyShortBtn" class="btn" onclick="copyShareShortUrl()" style="flex: 1; min-width: 120px; display: none; background: #ffb703; color: #000; font-weight: 700; border: none;">Salin TShort</button>
         <button type="button" id="copyBypassBtn" class="btn secondary" onclick="copyShareBypassUrl()" style="flex: 1; min-width: 120px; display: none;">Salin Tautan + Sandi</button>
         
         <form method="POST" action="" id="revokeShareForm" style="flex: 1; display: flex; margin: 0; min-width: 120px;">
@@ -542,6 +543,7 @@
 
     // Reset shortcode section
     document.getElementById('tshortLinkSection').style.display = 'none';
+    document.getElementById('copyShortBtn').style.display = 'none';
     
     // Fetch TShort shortcode
     fetch(window.location.origin + '/share/' + shareUuid + '/shortcode-data')
@@ -551,6 +553,7 @@
           var tshortUrl = window.location.origin + '/s/' + data.short_code;
           document.getElementById('activeShareShortUrl').value = tshortUrl;
           document.getElementById('tshortLinkSection').style.display = 'block';
+          document.getElementById('copyShortBtn').style.display = 'inline-block';
         }
       })
       .catch(function(err) { console.error("Gagal memuat TShort code:", err); });
@@ -571,6 +574,13 @@
     input.select();
     document.execCommand('copy');
     alert('Tautan berhasil disalin ke clipboard!');
+  }
+
+  function copyShareShortUrl() {
+    var input = document.getElementById('activeShareShortUrl');
+    input.select();
+    document.execCommand('copy');
+    alert('Tautan TShort berhasil disalin ke clipboard!');
   }
 
   function copyShareBypassUrl() {
