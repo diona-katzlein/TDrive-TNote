@@ -292,13 +292,10 @@
   </div>
 </div>
 
-<!-- ---------------------------------------------------- -->
-<!-- MODAL: INFO SHARE TAUTAN AKTIF -->
-<!-- ---------------------------------------------------- -->
 <div id="activeShareModal" class="modal-overlay">
   <div class="modal-card">
     <div class="modal-header">
-      <h3>🔗 Tautan Berbagi Aktif</h3>
+      <h3>🔗 Tautan Berbagi Catatan</h3>
       <button class="modal-close" onclick="closeActiveShareModal()">&times;</button>
     </div>
     <div class="form">
@@ -308,10 +305,18 @@
         <input type="text" id="activeShareUrl" readonly onclick="this.select();" style="font-family: monospace; font-size: 13px;" />
       </label>
       
-      <div style="display: flex; gap: 10px; margin-top: 10px;">
-        <button type="button" class="btn" onclick="copyShareUrl()" style="flex: 1;">Salin Tautan</button>
+      <!-- Opsi Tautan Auto-Bypass (Muncul hanya jika share dilindungi password) -->
+      <div id="bypassLinkSection" style="margin-top: 14px; display: none;">
+        <label style="color: var(--accent); font-weight: 700;">🔗 Tautan Auto-Bypass (Include Sandi Base32)</label>
+        <input type="text" id="activeShareBypassUrl" readonly onclick="this.select();" style="font-family: monospace; font-size: 13px; border-color: var(--accent);" />
+        <p class="hint" style="margin: 4px 0 0 0; font-size: 11px; color: var(--muted);">Tautan ini menyertakan password ter-encode Base32 sehingga penerima tidak perlu mengetikkan password lagi.</p>
+      </div>
+      
+      <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
+        <button type="button" class="btn" onclick="copyShareUrl()" style="flex: 1; min-width: 120px;">Salin Tautan</button>
+        <button type="button" id="copyBypassBtn" class="btn secondary" onclick="copyShareBypassUrl()" style="flex: 1; min-width: 120px; display: none;">Salin Tautan + Sandi</button>
         
-        <form method="POST" action="" id="revokeShareForm" style="flex: 1; display: flex; margin: 0;">
+        <form method="POST" action="" id="revokeShareForm" style="flex: 1; display: flex; margin: 0; min-width: 120px;">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
           <input type="hidden" name="redirect" id="revokeRedirect" />
           <!-- Honeypot -->
@@ -384,10 +389,49 @@
     document.getElementById('shareModal').style.display = 'none';
   }
 
-  function showActiveShare(name, shareUuid) {
+  // Base32 encoder helper (RFC 4648)
+  function base32Encode(str) {
+    var alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    var bytes = [];
+    for (var i = 0; i < str.length; i++) {
+      bytes.push(str.charCodeAt(i));
+    }
+    
+    var result = "";
+    var val = 0;
+    var count = 0;
+    for (var i = 0; i < bytes.length; i++) {
+      val = (val << 8) | bytes[i];
+      count += 8;
+      while (count >= 5) {
+        result += alphabet.charAt((val >> (count - 5)) & 31);
+        count -= 5;
+      }
+    }
+    if (count > 0) {
+      result += alphabet.charAt((val << (5 - count)) & 31);
+    }
+    return result;
+  }
+
+  function showActiveShare(name, shareUuid, plainPassword) {
     var fullUrl = window.location.origin + '/share/' + shareUuid;
     document.getElementById('activeShareItemName').innerText = name;
     document.getElementById('activeShareUrl').value = fullUrl;
+    
+    var bypassSection = document.getElementById('bypassLinkSection');
+    var copyBypassBtn = document.getElementById('copyBypassBtn');
+    
+    if (plainPassword) {
+      var encoded = base32Encode(plainPassword);
+      var bypassUrl = fullUrl + '?pass=' + encoded;
+      document.getElementById('activeShareBypassUrl').value = bypassUrl;
+      bypassSection.style.display = 'block';
+      copyBypassBtn.style.display = 'inline-block';
+    } else {
+      bypassSection.style.display = 'none';
+      copyBypassBtn.style.display = 'none';
+    }
     
     var form = document.getElementById('revokeShareForm');
     form.action = '/share/' + shareUuid + '/revoke';
@@ -406,6 +450,24 @@
     document.execCommand('copy');
     alert('Tautan berhasil disalin ke clipboard!');
   }
+
+  function copyShareBypassUrl() {
+    var input = document.getElementById('activeShareBypassUrl');
+    input.select();
+    document.execCommand('copy');
+    alert('Tautan Auto-Bypass (termasuk sandi) berhasil disalin ke clipboard!');
+  }
+
+  // Deteksi share yang baru saja dibuat berpassword
+  window.addEventListener('DOMContentLoaded', function() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var createdUuid = urlParams.get('created_share_uuid');
+    var createdPass = urlParams.get('created_pass');
+    var createdName = urlParams.get('created_name');
+    if (createdUuid && createdPass) {
+      showActiveShare(createdName || 'Catatan Berbagi', createdUuid, createdPass);
+    }
+  });
 
   // --- LOGIKA WORKSPACE MODAL ---
   function openWorkspaceModal(type, uuid, name) {

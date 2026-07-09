@@ -47,10 +47,64 @@
     font-size: 14px;
     font-weight: 600;
   }
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 20px;
+  }
+  .modal-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    max-width: 900px;
+    width: 100%;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .modal-close:hover {
+    color: var(--text);
+  }
 </style>
 
 <div class="file-view-card">
-  <div class="file-icon">📄</div>
+  <%
+    var mimeType = file.mime || '';
+    var nameLower = file.name.toLowerCase();
+    var isImage = mimeType.startsWith('image/');
+    var isVideo = mimeType.startsWith('video/');
+    var isAudio = mimeType.startsWith('audio/');
+    var isPdf = mimeType === 'application/pdf' || nameLower.endsWith('.pdf');
+    var isDoc = nameLower.endsWith('.doc') || nameLower.endsWith('.docx') || nameLower.endsWith('.xls') || nameLower.endsWith('.xlsx') || nameLower.endsWith('.ppt') || nameLower.endsWith('.pptx');
+    var isPreviewable = isImage || isVideo || isAudio || isPdf || isDoc;
+    
+    var icon = '📄';
+    if (isImage) icon = '🖼️';
+    else if (isVideo) icon = '🎥';
+    else if (isAudio) icon = '🎵';
+    else if (isPdf) icon = '📕';
+    else if (isDoc) icon = '📘';
+  %>
+  
+  <div class="file-icon"><%= icon %></div>
   <div class="file-title"><%= file.name %></div>
   
   <div class="file-meta-grid">
@@ -72,11 +126,71 @@
     </div>
   </div>
 
-  <div style="margin-top: 25px;">
+  <div style="margin-top: 25px; display: flex; flex-direction: column; gap: 12px;">
+    <% if (isPreviewable) { %>
+      <button class="btn secondary" onclick="openPreviewModal()" style="width: 100%; font-size: 15px; padding: 12px; font-weight: 700;">
+        👁️ Pratinjau Berkas (Preview)
+      </button>
+    <% } %>
+    
     <a class="btn" href="/share/<%= uuid %>/download" style="width: 100%; display: block; font-size: 15px; padding: 12px;">
       ⬇ Unduh Berkas
     </a>
   </div>
 </div>
+
+<!-- Modal Pratinjau Publik -->
+<% if (isPreviewable) { %>
+  <div id="sharePreviewModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><%= file.name %></h3>
+        <button class="modal-close" onclick="closePreviewModal()">&times;</button>
+      </div>
+      <div id="previewContainer" style="background: #000; display: flex; align-items: center; justify-content: center; min-height: 300px; padding: 10px;">
+        <!-- Konten disuntikkan secara dinamis -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var previewMime = '<%= mimeType %>';
+    var isImage = <%= isImage %>;
+    var isVideo = <%= isVideo %>;
+    var isAudio = <%= isAudio %>;
+    var isPdf = <%= isPdf %>;
+    var isDoc = <%= isDoc %>;
+    var previewUrl = window.location.origin + '/share/<%= uuid %>/preview';
+    var downloadUrl = window.location.origin + '/share/<%= uuid %>/download';
+
+    function openPreviewModal() {
+      var modal = document.getElementById('sharePreviewModal');
+      var container = document.getElementById('previewContainer');
+      modal.style.display = 'flex';
+      
+      var html = '';
+      if (isImage) {
+        html = '<img src="' + previewUrl + '" style="max-width: 100%; max-height: 70vh; object-fit: contain; border-radius: 4px;" />';
+      } else if (isVideo) {
+        html = '<video controls autoplay style="width: 100%; max-height: 70vh; outline: none;"><source src="' + previewUrl + '" type="' + previewMime + '">Browser Anda tidak mendukung video HTML5.</video>';
+      } else if (isAudio) {
+        html = '<audio controls autoplay style="width: 100%; max-height: 70vh; outline: none; margin: 20px 0;"><source src="' + previewUrl + '" type="' + previewMime + '">Browser Anda tidak mendukung audio HTML5.</audio>';
+      } else if (isPdf) {
+        html = '<iframe src="' + previewUrl + '" style="width: 100%; height: 75vh; border: none; background: #fff; border-radius: 4px;"></iframe>';
+      } else if (isDoc) {
+        // Gunakan Google Docs Viewer untuk menampilkan Excel/Docs/Word yang disimpan di server publik secara instan
+        var viewerUrl = 'https://docs.google.com/gview?url=' + encodeURIComponent(downloadUrl) + '&embedded=true';
+        html = '<iframe src="' + viewerUrl + '" style="width: 100%; height: 75vh; border: none; background: #fff; border-radius: 4px;"></iframe>';
+      }
+      
+      container.innerHTML = html;
+    }
+
+    function closePreviewModal() {
+      document.getElementById('sharePreviewModal').style.display = 'none';
+      document.getElementById('previewContainer').innerHTML = '';
+    }
+  </script>
+<% } %>
 
 <%- include('../partials/footer') %>

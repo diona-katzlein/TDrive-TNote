@@ -12,6 +12,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "base32": "^0.0.7",
     "better-sqlite3": "^11.3.0",
     "big-integer": "^1.6.52",
     "dotenv": "^16.4.5",

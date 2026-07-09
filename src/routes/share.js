@@ -83,7 +83,12 @@ router.post('/create', async (req, res) => {
 
     await auditService.log(req, 'CREATE_SHARE', `Membuat share untuk ${item_type}: ${titleForAudit} (Share UUID: ${shareUuid})`);
     
-    res.redirect(redirectBack + (redirectBack.includes('?') ? '&' : '?') + 'notice=' + encodeURIComponent('Tautan berbagi publik berhasil dibuat!'));
+    let redirectUrl = redirectBack + (redirectBack.includes('?') ? '&' : '?') + 'notice=' + encodeURIComponent('Tautan berbagi publik berhasil dibuat!');
+    if (password) {
+      redirectUrl += '&created_share_uuid=' + shareUuid + '&created_pass=' + encodeURIComponent(password) + '&created_name=' + encodeURIComponent(titleForAudit);
+    }
+    
+    res.redirect(redirectUrl);
   } catch (err) {
     res.redirect(redirectBack + (redirectBack.includes('?') ? '&' : '?') + 'error=' + encodeURIComponent(err.message));
   }
@@ -168,6 +173,18 @@ router.get('/:uuid', async (req, res) => {
 
     // Proteksi sandi
     if (share.password_hash) {
+      // Coba verifikasi otomatis via query parameter '?pass=' (Base32 encoded)
+      if (req.query.pass) {
+        try {
+          const base32 = require('base32');
+          const plainPassword = base32.decode(req.query.pass).toString('utf8').trim();
+          if (plainPassword && cryptoService.verifyPassword(plainPassword, share.password_hash)) {
+            req.session.unlockedShares = req.session.unlockedShares || {};
+            req.session.unlockedShares[uuid] = true;
+          }
+        } catch (_) {}
+      }
+
       const unlocked = req.session.unlockedShares && req.session.unlockedShares[uuid];
       if (!unlocked) {
         return res.redirect(`/share/${uuid}/unlock`);
@@ -259,6 +276,44 @@ router.get('/:uuid/download', async (req, res) => {
     res.end();
   } catch (err) {
     res.status(500).send('Gagal mengunduh: ' + err.message);
+  }
+});
+
+// Preview/Stream Shared File Utama (Mendukung in-browser media player)
+router.get('/:uuid/preview', async (req, res) => {
+  const { uuid } = req.params;
+  try {
+    const [shares] = await db.query('SELECT * FROM shares WHERE uuid = ?', [uuid]);
+    const share = shares[0];
+    if (!share || !isShareActive(share) || share.item_type !== 'file') {
+      return res.status(404).send('Berkas tidak ditemukan atau kedaluwarsa.');
+    }
+
+    if (share.password_hash) {
+      const unlocked = req.session.unlockedShares && req.session.unlockedShares[uuid];
+      if (!unlocked) return res.status(403).send('Akses ditolak (butuh sandi).');
+    }
+
+    const file = await fileService.getFile(share.item_id);
+    if (!file) return res.status(404).send('Berkas sudah tidak ada.');
+
+    const account = await fileService.getAccount(file.account_id);
+    if (!account) return res.status(404).send('Akun storage sudah tidak valid.');
+
+    res.setHeader('Content-Type', file.mime || 'application/octet-stream');
+    res.setHeader('Content-Length', file.size);
+    res.setHeader('Accept-Ranges', 'none');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
+
+    await auditService.log(null, 'PREVIEW_SHARE_FILE', `Pratinjau berkas publik: ${file.name} (Share: ${uuid})`);
+    await storageService.downloadToStream(account, file, res);
+    res.end();
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).send('Gagal pratinjau: ' + err.message);
+    } else {
+      res.destroy(err);
+    }
   }
 });
 
