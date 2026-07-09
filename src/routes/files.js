@@ -100,12 +100,12 @@ router.get('/', (req, res) => renderBrowser(req, res, null));
 router.get('/folder/:uuid', (req, res) => renderBrowser(req, res, req.params.uuid));
 
 // Upload File (dengan penanganan Versi Berkas jika nama duplikat)
-router.post('/upload', upload.single('file'), async (req, res) => {
+router.post('/upload', upload.array('files'), async (req, res) => {
   const folderUuid = req.body.folder_uuid || null;
-  const tempPath = req.file && req.file.path;
+  const files = req.files || [];
   
   try {
-    if (!req.file) throw new Error('Tidak ada file yang dipilih.');
+    if (files.length === 0) throw new Error('Tidak ada file yang dipilih.');
     
     let folderId = null;
     if (folderUuid) {
@@ -116,34 +116,43 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       folderId = folder.id;
     }
 
-    // Periksa apakah berkas dengan nama yang sama sudah ada di direktori tersebut
-    const existingFile = await fileService.findActiveFileByName(req.activeAccount.id, folderId, req.file.originalname);
+    for (const file of files) {
+      const tempPath = file.path;
+      try {
+        // Periksa apakah berkas dengan nama yang sama sudah ada di direktori tersebut
+        const existingFile = await fileService.findActiveFileByName(req.activeAccount.id, folderId, file.originalname);
 
-    const uploadedFile = await storageService.uploadFile(req.activeAccount, {
-      tempPath,
-      filename: req.file.originalname,
-      mime: req.file.mimetype,
-      size: req.file.size,
-      folderId,
-      storagePeer: req.body.storage_peer || null,
-    });
+        const uploadedFile = await storageService.uploadFile(req.activeAccount, {
+          tempPath,
+          filename: file.originalname,
+          mime: file.mimetype,
+          size: file.size,
+          folderId,
+          storagePeer: req.body.storage_peer || null,
+        });
 
-    // Jika sudah ada berkas bernama sama, jadikan yang lama sebagai versi riwayat
-    if (existingFile) {
-      await db.query('UPDATE files SET parent_file_id = ?, folder_id = NULL WHERE id = ?', [uploadedFile.id, existingFile.id]);
-      await db.query('UPDATE files SET parent_file_id = ? WHERE parent_file_id = ? AND id != ?', [uploadedFile.id, existingFile.id, uploadedFile.id]);
-      await auditService.log(req, 'VERSION_CREATE', `Mengarsipkan versi lama berkas "${req.file.originalname}" (ID: ${existingFile.id}) menjadi riwayat dari berkas baru (ID: ${uploadedFile.id})`);
+        // Jika sudah ada berkas bernama sama, jadikan yang lama sebagai versi riwayat
+        if (existingFile) {
+          await db.query('UPDATE files SET parent_file_id = ?, folder_id = NULL WHERE id = ?', [uploadedFile.id, existingFile.id]);
+          await db.query('UPDATE files SET parent_file_id = ? WHERE parent_file_id = ? AND id != ?', [uploadedFile.id, existingFile.id, uploadedFile.id]);
+          await auditService.log(req, 'VERSION_CREATE', `Mengarsipkan versi lama berkas "${file.originalname}" (ID: ${existingFile.id}) menjadi riwayat dari berkas baru (ID: ${uploadedFile.id})`);
+        }
+
+        await auditService.log(req, 'UPLOAD_FILE', `Mengunggah berkas: ${file.originalname} (${file.size} bytes, UUID: ${uploadedFile.uuid})`);
+      } finally {
+        if (tempPath) fs.promises.unlink(tempPath).catch(() => {});
+      }
     }
-
-    await auditService.log(req, 'UPLOAD_FILE', `Mengunggah berkas: ${req.file.originalname} (${req.file.size} bytes, UUID: ${uploadedFile.uuid})`);
 
     const redirectPath = folderUuid ? `/drive/folder/${folderUuid}` : '/drive';
     res.redirect(redirectPath);
   } catch (err) {
+    // Bersihkan file sisa jika terjadi error di tengah jalan
+    for (const f of files) {
+      if (f.path) fs.promises.unlink(f.path).catch(() => {});
+    }
     const back = folderUuid ? `/drive/folder/${folderUuid}` : '/drive';
     res.redirect(`${back}${back.includes('?') ? '&' : '?'}error=${encodeURIComponent(err.message)}`);
-  } finally {
-    if (tempPath) fs.promises.unlink(tempPath).catch(() => {});
   }
 });
 

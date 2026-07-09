@@ -158,7 +158,7 @@
       <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <input type="hidden" name="folder_uuid" value="<%= currentFolder ? currentFolder.uuid : '' %>" />
-      <input type="file" name="file" id="fileInput" required />
+      <input type="file" name="files" id="fileInput" multiple required />
       
       <select name="storage_peer" title="Target Penyimpanan Telegram" style="font-size: 12px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer;">
         <option value="me" <%= (activeAccount && activeAccount.storage_peer === 'me') ? 'selected' : '' %>>📥 Saved Messages (me)</option>
@@ -596,9 +596,13 @@
               }
             }
 
-            if (cleanChannelId && cleanChannelId !== 'me' && cleanChannelId !== 'Saved Messages') {
+            if (cleanChannelId && cleanChannelId !== 'me' && cleanChannelId !== 'Saved Messages' && cleanChannelId !== 'undefined') {
               var tmeUrl = 'https://t.me/c/' + cleanChannelId + '/' + data.message_id;
               document.getElementById('activeShareTelegramUrl').value = tmeUrl;
+              document.getElementById('telegramShortlinkSection').style.display = 'block';
+            } else {
+              // Fallback Saved Messages / Private chat info
+              document.getElementById('activeShareTelegramUrl').value = "Tidak tersedia (Saved Messages bersifat privat)";
               document.getElementById('telegramShortlinkSection').style.display = 'block';
             }
           }

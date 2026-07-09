@@ -38,9 +38,26 @@ a:hover { text-decoration: underline; }
 }
 .brand { font-size: 20px; font-weight: 800; color: var(--text); }
 .brand span { color: var(--accent); }
-.topbar nav { display: flex; gap: 16px; }
-.topbar nav a { color: var(--muted); font-weight: 600; }
-.topbar nav a:hover { color: var(--text); text-decoration: none; }
+.topbar nav { display: flex; gap: 20px; align-items: center; }
+.topbar nav a {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 14.5px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease-in-out;
+  letter-spacing: 0.3px;
+}
+.topbar nav a:hover {
+  color: var(--text);
+  background: var(--panel-2);
+  text-decoration: none;
+}
+.topbar nav a.active {
+  color: var(--text);
+  background: var(--panel-2);
+  border-bottom: 2px solid var(--accent);
+}
 .account-switch { margin-left: auto; }
 .account-switch select {
   background: var(--panel-2);

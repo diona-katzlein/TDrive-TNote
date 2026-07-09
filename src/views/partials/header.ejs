@@ -10,15 +10,15 @@
 <body>
   <header class="topbar">
     <a class="brand" href="/" style="display: flex; align-items: center;"><img src="/logo.svg" alt="TDrive Logo" style="height: 36px;" /></a>
-    <nav>
-      <a href="/drive">Drive</a>
-      <a href="/notes">TNote</a>
-      <!-- <a href="/workspace/shared-with-me">Workspace</a> -->
+    <nav class="nav-links">
+      <a class="nav-link" href="/drive">Drive</a>
+      <a class="nav-link" href="/notes">TNote</a>
+      <!-- <a class="nav-link" href="/workspace/shared-with-me">Workspace</a> -->
       <% if (typeof isAdmin !== 'undefined' && isAdmin) { %>
-        <a href="/accounts">Accounts</a>
-        <a href="/backup">Backup</a>
+        <a class="nav-link" href="/accounts">Accounts</a>
+        <a class="nav-link" href="/backup">Backup</a>
       <% } %>
-      <a href="/profile">Profil</a>
+      <a class="nav-link" href="/profile">Profile</a>
     </nav>
     <div class="account-switch">
       <% if (typeof accounts !== 'undefined' && accounts.length) { %>
