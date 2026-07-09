@@ -20,6 +20,7 @@
     "express": "^4.19.2",
     "express-mysql-session": "^3.0.3",
     "express-session": "^1.18.0",
+    "mammoth": "^1.12.0",
     "multer": "^2.2.0",
     "mysql2": "^3.22.5",
     "telegram": "^2.22.2"

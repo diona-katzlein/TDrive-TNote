@@ -160,6 +160,7 @@
     var isAudio = <%= isAudio %>;
     var isPdf = <%= isPdf %>;
     var isDoc = <%= isDoc %>;
+    var fileName = '<%= file.name.toLowerCase() %>';
     var previewUrl = window.location.origin + '/share/<%= uuid %>/preview';
     var downloadUrl = window.location.origin + '/share/<%= uuid %>/download';
 
@@ -176,21 +177,36 @@
       } else if (isAudio) {
         html = '<audio controls autoplay style="width: 100%; max-height: 70vh; outline: none; margin: 20px 0;"><source src="' + previewUrl + '" type="' + previewMime + '">Browser Anda tidak mendukung audio HTML5.</audio>';
       } else if (isPdf) {
-        // Render PDF menggunakan tag <embed> bawaan browser agar tidak bergantung pada server luar
         html = '<embed src="' + previewUrl + '" type="application/pdf" style="width: 100%; height: 75vh; border-radius: 4px;" />';
-      } else if (isDoc) {
-        // Tampilkan link alternatif menggunakan Office Online Viewer dan Google Docs Viewer
+      } else if (fileName.endsWith('.docx')) {
+        // UNTUK WORD (.docx): Render langsung menggunakan parser Mammoth.js di backend server TDrive
+        container.innerHTML = '<p style="color: #fff; font-size: 13px;">Sedang menerjemahkan dokumen Word secara lokal... Harap tunggu...</p>';
+        
+        fetch(window.location.origin + '/share/<%= uuid %>/docx-preview')
+          .then(function(res) { return res.text(); })
+          .then(function(htmlContent) {
+            container.innerHTML = htmlContent;
+          })
+          .catch(function(err) {
+            container.innerHTML = '<p style="color: red; padding: 20px;">Gagal memuat pratinjau dokumen: ' + err.message + '</p>';
+          });
+        return;
+      } else {
+        // Excel, Powerpoint, atau Word lama (.doc)
         var officeUrl = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(downloadUrl);
         var googleUrl = 'https://docs.google.com/gview?url=' + encodeURIComponent(downloadUrl) + '&embedded=true';
         
         html = '<div style="width: 100%; display: flex; flex-direction: column; gap: 10px;">' +
+               '  <div style="background: #222; padding: 12px; border-radius: 6px; color: #ffb703; font-size: 12px; text-align: center; border: 1px solid #d29922;">' +
+               '    ⚠️ <strong>Catatan Pratinjau Online:</strong> File Excel/Powerpoint yang dilindungi sandi tidak dapat dibaca oleh pembaca Microsoft/Google. Silakan gunakan tombol unduh di bawah jika error.' +
+               '  </div>' +
                '  <div style="background: var(--panel-2); padding: 8px; border-radius: 4px; display: flex; justify-content: center; gap: 14px; font-size: 12px;">' +
                '    <span style="color: var(--muted);">Alternative Readers:</span>' +
                '    <a href="#" onclick="document.getElementById(\'docIframe\').src=\'' + officeUrl + '\'; return false;" style="color: var(--accent); font-weight: 700;">Microsoft Office Online</a>' +
                '    <span style="color: var(--border);">|</span>' +
                '    <a href="#" onclick="document.getElementById(\'docIframe\').src=\'' + googleUrl + '\'; return false;" style="color: var(--accent); font-weight: 700;">Google Docs Viewer</a>' +
                '  </div>' +
-               '  <iframe id="docIframe" src="' + officeUrl + '" style="width: 100%; height: 75vh; border: none; background: #fff; border-radius: 4px;"></iframe>' +
+               '  <iframe id="docIframe" src="' + officeUrl + '" style="width: 100%; height: 60vh; border: none; background: #fff; border-radius: 4px;"></iframe>' +
                '</div>';
       }
       

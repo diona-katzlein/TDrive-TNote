@@ -332,6 +332,54 @@ router.get('/:uuid/preview', async (req, res) => {
   }
 });
 
+// Konversi DOCX ke HTML lokal menggunakan Mammoth.js
+router.get('/:uuid/docx-preview', async (req, res) => {
+  const { uuid } = req.params;
+  try {
+    const [shares] = await db.query('SELECT * FROM shares WHERE uuid = ?', [uuid]);
+    const share = shares[0];
+    if (!share || !isShareActive(share) || share.item_type !== 'file') {
+      return res.status(404).send('Berkas tidak ditemukan atau kedaluwarsa.');
+    }
+
+    if (share.password_hash) {
+      const unlocked = req.session.unlockedShares && req.session.unlockedShares[uuid];
+      if (!unlocked) return res.status(403).send('Akses ditolak (butuh sandi).');
+    }
+
+    const file = await fileService.getFile(share.item_id);
+    if (!file) return res.status(404).send('Berkas sudah tidak ada.');
+
+    const account = await fileService.getAccount(file.account_id);
+    if (!account) return res.status(404).send('Akun storage sudah tidak valid.');
+
+    // Download file ke memori buffer secara streaming
+    const chunks = [];
+    const stream = new (require('stream').Writable)({
+      write(chunk, encoding, next) {
+        chunks.push(chunk);
+        next();
+      }
+    });
+
+    await storageService.downloadToStream(account, file, stream);
+    const fileBuffer = Buffer.concat(chunks);
+
+    const mammoth = require('mammoth');
+    const result = await mammoth.convertToHtml({ buffer: fileBuffer });
+    
+    // Kirim HTML bersih
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`
+      <div class="docx-preview-body" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; padding: 20px; background: #fff; border-radius: 4px; overflow-y: auto; max-height: 70vh;">
+        ${result.value}
+      </div>
+    `);
+  } catch (err) {
+    res.status(500).send('<p style="color: red; padding: 20px;">Gagal memproses pratinjau Word: ' + err.message + '</p>');
+  }
+});
+
 // Navigasi Subfolder Publik di dalam Shared Folder
 router.get('/:share_uuid/folder/:folder_uuid', async (req, res) => {
   const { share_uuid, folder_uuid } = req.params;
