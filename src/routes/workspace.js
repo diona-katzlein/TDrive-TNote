@@ -98,8 +98,8 @@ router.post('/revoke-workspace/:id', async (req, res) => {
 
 // 2. GET /workspace/shared-with-me (Daftar item yang dibagikan dengan saya)
 router.get('/shared-with-me', async (req, res) => {
-  const phone = req.session.userPhone;
   try {
+    const phone = accountService.normPhone(req.session.userPhone);
     const [folders] = await db.query(
       `SELECT sw.id as workspace_id, sw.permission, f.*, a.phone as owner_phone 
        FROM shared_workspaces sw 
@@ -144,9 +144,8 @@ router.get('/shared-with-me', async (req, res) => {
 // 3. GET /workspace/folder/:uuid (Browsing subfolder kolaborasi milik orang lain)
 router.get('/folder/:uuid', async (req, res) => {
   const { uuid } = req.params;
-  const phone = req.session.userPhone;
-
   try {
+    const phone = accountService.normPhone(req.session.userPhone);
     const subfolder = await fileService.getFolderByUuid(uuid);
     if (!subfolder || subfolder.deleted_at !== null) return res.status(404).send('Folder tidak ditemukan.');
 
