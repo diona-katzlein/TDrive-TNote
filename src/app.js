@@ -40,7 +40,8 @@ app.set('views', path.join(__dirname, 'views'));
 
 // Proteksi Laju Permintaan Global & Honeypot
 app.use(globalLimiter);
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+app.use(express.json({ limit: '20mb' }));
 app.use(honeypot);
 
 const MySQLStore = require('express-mysql-session')(session);
@@ -153,6 +154,18 @@ app.use('/backup', backupRouter);
 
 // 404
 app.use((req, res) => res.status(404).send('Halaman tidak ditemukan.'));
+
+// Global error handler (termasuk penanganan Payload Too Large)
+app.use((err, req, res, next) => {
+  if (err.status === 413 || err.type === 'entity.too.large') {
+    res.status(413).render('error-payload', {
+      title: 'Payload Terlalu Besar',
+      error: 'Ukuran data request melebihi batas maksimal yang diizinkan (maksimal 20MB).'
+    });
+  } else {
+    res.status(500).send('Terjadi kesalahan internal: ' + err.message);
+  }
+});
 
 // Mulai Database dan Server secara Asinkron
 async function start() {

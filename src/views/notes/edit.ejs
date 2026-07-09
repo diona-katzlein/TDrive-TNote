@@ -193,15 +193,22 @@
       <!-- Kategori -->
       <div>
         <label class="hint" style="display: block; margin-bottom: 6px;">Kategori</label>
-        <div style="display: flex; gap: 6px;">
-          <input type="text" name="category" id="noteCategory" list="category-options" class="editor-input" 
-            placeholder="General" value="<%= note ? note.category : 'General' %>" style="flex: 1;" />
-          <datalist id="category-options">
-            <% categories.forEach(function(cat) { %>
-              <option value="<%= cat %>"></option>
-            <% }); %>
-          </datalist>
-        </div>
+        <select id="categorySelector" class="editor-input" style="cursor: pointer; height: 47px;" onchange="handleCategoryChange(this.value)">
+          <% 
+            var currentCat = note ? note.category : 'General'; 
+            var catFound = false;
+          %>
+          <% categories.forEach(function(cat) { %>
+            <option value="<%= cat %>" <%= (currentCat === cat) ? 'selected' : '' %>><%= cat %></option>
+            <% if (currentCat === cat) catFound = true; %>
+          <% }); %>
+          <% if (currentCat && !catFound) { %>
+            <option value="<%= currentCat %>" selected><%= currentCat %></option>
+          <% } %>
+          <option value="__NEW_CAT__" style="color: var(--accent); font-weight: 700;">➕ Buat Kategori Baru...</option>
+        </select>
+        <input type="text" name="category" id="noteCategory" class="editor-input" placeholder="Nama Kategori Baru" 
+          value="<%= currentCat %>" style="display: none; margin-top: 8px;" />
       </div>
 
       <!-- Jenis Catatan -->
@@ -215,13 +222,13 @@
         </select>
       </div>
 
-      <!-- Target Penyimpanan (Terkunci sesuai pengaturan Profil) -->
+      <!-- Target Penyimpanan -->
       <div>
-        <label class="hint" style="display: block; margin-bottom: 6px;">Saluran Target Telegram (Terkunci)</label>
+        <label class="hint" style="display: block; margin-bottom: 6px;">Saluran Target Telegram</label>
         <% 
-          var activePeer = (activeAccount && activeAccount.storage_peer) ? activeAccount.storage_peer : 'me'; 
+          var activePeer = (note && note.peer) ? note.peer : ((activeAccount && activeAccount.storage_peer) ? activeAccount.storage_peer : 'me'); 
         %>
-        <select disabled class="editor-input" style="cursor: not-allowed; height: 47px; background: var(--bg); opacity: 0.7;">
+        <select name="storage_peer" class="editor-input" style="cursor: pointer; height: 47px;">
           <option value="me" <%= activePeer === 'me' ? 'selected' : '' %>>📥 Saved Messages (me)</option>
           <% channels.forEach(function(c) { %>
             <% 
@@ -234,14 +241,16 @@
             <option value="<%= c.channel_id %>" <%= activePeer === c.channel_id ? 'selected' : '' %>><%= c.title %> (ID: <%= displayId %>)</option>
           <% }); %>
         </select>
-        <input type="hidden" name="storage_peer" value="<%= activePeer %>" />
       </div>
     </div>
 
     <!-- Isi Catatan -->
     <div>
-      <label class="hint" style="display: block; margin-bottom: 6px;">Konten Catatan</label>
-      <textarea name="body" id="noteBody" class="editor-textarea" placeholder="Tulis catatan rahasia Anda di sini..." required><%= note ? note.body : '' %></textarea>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <label class="hint" style="margin: 0;">Konten Catatan</label>
+        <span id="charCount" class="hint" style="font-size: 11px;">0 / 3500 Karakter</span>
+      </div>
+      <textarea name="body" id="noteBody" class="editor-textarea" placeholder="Tulis catatan rahasia Anda di sini..." required maxlength="3500" oninput="updateCharCount()"><%= note ? note.body : '' %></textarea>
     </div>
 
     <div class="editor-actions">
@@ -329,6 +338,13 @@
         <p class="hint" style="margin: 4px 0 0 0; font-size: 11px; color: var(--muted);">Tautan ini menyertakan password ter-encode Base32 sehingga penerima tidak perlu mengetikkan password lagi.</p>
       </div>
       
+      <!-- Opsi TShort Shortlink -->
+      <div id="tshortLinkSection" style="margin-top: 14px; display: none;">
+        <label style="color: #ffb703; font-weight: 700;">⚡ Tautan Pendek TShort</label>
+        <input type="text" id="activeShareShortUrl" readonly onclick="this.select();" style="font-family: monospace; font-size: 13px; border-color: #ffb703;" />
+        <p class="hint" style="margin: 4px 0 0 0; font-size: 11px; color: var(--muted);">Shortlink instan TShort yang aman dan ringkas.</p>
+      </div>
+      
       <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
         <button type="button" class="btn" onclick="copyShareUrl()" style="flex: 1; min-width: 120px;">Salin Tautan</button>
         <button type="button" id="copyBypassBtn" class="btn secondary" onclick="copyShareBypassUrl()" style="flex: 1; min-width: 120px; display: none;">Salin Tautan + Sandi</button>
@@ -345,7 +361,48 @@
   </div>
 </div>
 
-<!-- ---------------------------------------------------- -->
+<!-- MODAL: MEMBAGIKAN CATATAN (SHARED MODAL) -->
+<div id="shareModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+  <div class="modal-card" style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 480px; padding: 24px;">
+    <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 18px;">
+      <h3 id="shareTitle" style="margin: 0; font-size: 18px;">Bagikan Catatan</h3>
+      <button class="modal-close" onclick="closeShareModal()" style="background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer;">&times;</button>
+    </div>
+    <form method="POST" action="/share/create" class="form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" name="redirect" id="shareRedirect" />
+      <input type="hidden" name="item_type" value="note" />
+      <input type="hidden" name="item_uuid" id="shareItemUuid" />
+
+      <!-- Payload terdekripsi dikirim ke server untuk share publik -->
+      <input type="hidden" name="shared_title" id="sharedTitle" />
+      <input type="hidden" name="shared_body" id="sharedBody" />
+      <input type="hidden" name="shared_category" id="sharedCategory" />
+
+      <!-- Honeypot -->
+      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" style="display: none;" />
+
+      <p class="hint" style="margin-top: 0; margin-bottom: 15px;">Membagikan: <strong id="shareItemName" style="color: var(--text);">Catatan</strong></p>
+
+      <label style="display: block; margin-bottom: 12px;">Proteksi Sandi (Opsional)
+        <input type="password" name="password" placeholder="Masukkan kata sandi share" style="width: 100%; margin-top: 6px;" />
+      </label>
+
+      <label style="display: block; margin-bottom: 12px;">Masa Berlaku (Jam, Opsional)
+        <input type="number" name="expires_in_hours" min="1" placeholder="Mis. 24 (kosong = selamanya)" style="width: 100%; margin-top: 6px;" />
+      </label>
+
+      <label style="display: block; margin-bottom: 12px;">Batas Maksimal Dibuka (Kali, Opsional)
+        <input type="number" name="max_views" min="1" placeholder="Mis. 5 (kosong = tak terbatas)" style="width: 100%; margin-top: 6px;" />
+      </label>
+
+      <div style="margin-top: 20px; display: flex; gap: 10px;">
+        <button class="btn" type="submit" style="flex: 1;">Buat Tautan Berbagi</button>
+        <button class="btn ghost" type="button" onclick="closeShareModal()" style="flex: 1;">Batal</button>
+      </div>
+    </form>
+  </div>
+</div>
 <!-- MODAL: KELOLA WORKSPACE KOLABORASI -->
 <!-- ---------------------------------------------------- -->
 <div id="workspaceModal" class="modal-overlay">
@@ -384,6 +441,37 @@
 
 <script>
   var currentUrl = window.location.pathname + window.location.search;
+
+  function handleCategoryChange(val) {
+    var txtInput = document.getElementById('noteCategory');
+    if (val === '__NEW_CAT__') {
+      txtInput.style.display = 'block';
+      txtInput.value = '';
+      txtInput.focus();
+    } else {
+      txtInput.style.display = 'none';
+      txtInput.value = val;
+    }
+  }
+
+  function updateCharCount() {
+    var txt = document.getElementById('noteBody');
+    var label = document.getElementById('charCount');
+    if (txt && label) {
+      var len = txt.value.length;
+      label.innerText = len + " / 3500 Karakter";
+      if (len >= 3300) {
+        label.style.color = "var(--danger)";
+      } else {
+        label.style.color = "var(--muted)";
+      }
+    }
+  }
+
+  // Panggil saat halaman diload
+  window.addEventListener('DOMContentLoaded', function() {
+    updateCharCount();
+  });
 
   function openShareNoteModal(uuid, name) {
     document.getElementById('shareItemUuid').value = uuid;
@@ -439,16 +527,33 @@
     var bypassSection = document.getElementById('bypassLinkSection');
     var copyBypassBtn = document.getElementById('copyBypassBtn');
     
+    var finalUrlForShort = fullUrl;
     if (plainPassword) {
       var encoded = base32Encode(plainPassword);
       var bypassUrl = fullUrl + '?pass=' + encoded;
       document.getElementById('activeShareBypassUrl').value = bypassUrl;
       bypassSection.style.display = 'block';
       copyBypassBtn.style.display = 'inline-block';
+      finalUrlForShort = bypassUrl;
     } else {
       bypassSection.style.display = 'none';
       copyBypassBtn.style.display = 'none';
     }
+
+    // Reset shortcode section
+    document.getElementById('tshortLinkSection').style.display = 'none';
+    
+    // Fetch TShort shortcode
+    fetch(window.location.origin + '/share/' + shareUuid + '/shortcode-data')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success && data.short_code) {
+          var tshortUrl = window.location.origin + '/s/' + data.short_code;
+          document.getElementById('activeShareShortUrl').value = tshortUrl;
+          document.getElementById('tshortLinkSection').style.display = 'block';
+        }
+      })
+      .catch(function(err) { console.error("Gagal memuat TShort code:", err); });
     
     var form = document.getElementById('revokeShareForm');
     form.action = '/share/' + shareUuid + '/revoke';

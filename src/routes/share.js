@@ -81,16 +81,60 @@ router.post('/create', async (req, res) => {
       ]
     );
 
-    await auditService.log(req, 'CREATE_SHARE', `Membuat share untuk ${item_type}: ${titleForAudit} (Share UUID: ${shareUuid})`);
+    // AUTO GENERATE TSHORT LINK UNTUK SHARING INI
+    const hostDomain = req.protocol + '://' + req.get('host');
+    const fullOriginalUrl = hostDomain + '/share/' + shareUuid;
     
-    let redirectUrl = redirectBack + (redirectBack.includes('?') ? '&' : '?') + 'notice=' + encodeURIComponent('Tautan berbagi publik berhasil dibuat!');
-    if (password) {
-      redirectUrl += '&created_share_uuid=' + shareUuid + '&created_pass=' + encodeURIComponent(password) + '&created_name=' + encodeURIComponent(titleForAudit);
+    // Generate 6 digit short code acak
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let shortCode = '';
+    for (let i = 0; i < 6; i++) {
+      shortCode += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+
+    try {
+      // Simpan shortlink baru
+      await db.query(
+        'INSERT INTO shortlinks (account_id, short_code, original_url, clicks, created_at) VALUES (?, ?, ?, 0, ?)',
+        [req.activeAccount.id, shortCode, fullOriginalUrl, Date.now()]
+      );
+    } catch (_) {}
+
+    await auditService.log(req, 'CREATE_SHARE', `Membuat share untuk ${item_type}: ${titleForAudit} (Share UUID: ${shareUuid}, Short Code: /s/${shortCode})`);
+    
+    let redirectUrl = redirectBack + (redirectBack.includes('?') ? '&' : '?') + 'notice=' + encodeURIComponent('Tautan berbagi publik TShort berhasil dibuat!');
+    redirectUrl += '&created_share_uuid=' + shareUuid;
+    if (password) {
+      redirectUrl += '&created_pass=' + encodeURIComponent(password);
+    }
+    redirectUrl += '&created_name=' + encodeURIComponent(titleForAudit);
     
     res.redirect(redirectUrl);
   } catch (err) {
     res.redirect(redirectBack + (redirectBack.includes('?') ? '&' : '?') + 'error=' + encodeURIComponent(err.message));
+  }
+});
+
+// Ambil data shortcode TShort untuk share UUID tertentu
+router.get('/:uuid/shortcode-data', async (req, res) => {
+  const { uuid } = req.params;
+  try {
+    const targetUrlPath = `/share/${uuid}`;
+    const [rows] = await db.query(
+      'SELECT short_code FROM shortlinks WHERE original_url LIKE ?',
+      [`%${targetUrlPath}%`]
+    );
+
+    if (rows.length === 0) {
+      return res.json({ success: false, message: 'Tidak ada shortcode.' });
+    }
+
+    res.json({
+      success: true,
+      short_code: rows[0].short_code
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

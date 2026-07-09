@@ -77,6 +77,40 @@ router.post('/', async (req, res) => {
   }
 });
 
+// POST /shortlink/:id/edit - Edit shortlink
+router.post('/:id/edit', async (req, res) => {
+  const { id } = req.params;
+  const { original_url, short_code } = req.body;
+  try {
+    const [links] = await db.query('SELECT * FROM shortlinks WHERE id = ? AND account_id = ?', [id, req.activeAccount.id]);
+    const link = links[0];
+    if (!link) throw new Error('Shortlink tidak ditemukan.');
+
+    const newCode = (short_code || '').trim();
+    if (!newCode) throw new Error('Kode singkatan tidak boleh kosong.');
+    if (!/^[a-zA-Z0-9_-]{3,20}$/.test(newCode)) {
+      throw new Error('Kode singkatan hanya boleh berisi alfanumerik, dash (-), dan underscore (_), panjang 3-20 karakter.');
+    }
+
+    if (newCode !== link.short_code) {
+      const [existing] = await db.query('SELECT id FROM shortlinks WHERE short_code = ?', [newCode]);
+      if (existing.length > 0) {
+        throw new Error('Kode tersebut sudah digunakan.');
+      }
+    }
+
+    await db.query(
+      'UPDATE shortlinks SET original_url = ?, short_code = ? WHERE id = ?',
+      [original_url, newCode, id]
+    );
+
+    await auditService.log(req, 'EDIT_SHORTLINK', `Mengubah shortlink: /s/${link.short_code} -> /s/${newCode} (${original_url})`);
+    res.redirect('/shortlink?notice=' + encodeURIComponent('Shortlink berhasil diperbarui.'));
+  } catch (err) {
+    res.redirect('/shortlink?error=' + encodeURIComponent(err.message));
+  }
+});
+
 // POST /shortlink/:id/delete - Hapus shortlink
 router.post('/:id/delete', async (req, res) => {
   const { id } = req.params;

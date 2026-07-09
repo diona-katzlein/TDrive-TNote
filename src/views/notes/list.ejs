@@ -543,6 +543,13 @@
         <p class="hint" style="margin: 4px 0 0 0; font-size: 11px; color: var(--muted);">Tautan ini menyertakan password ter-encode Base32 sehingga penerima tidak perlu mengetikkan password lagi.</p>
       </div>
       
+      <!-- Opsi TShort Shortlink -->
+      <div id="tshortLinkSection" style="margin-top: 14px; display: none;">
+        <label style="color: #ffb703; font-weight: 700;">⚡ Tautan Pendek TShort</label>
+        <input type="text" id="activeShareShortUrl" readonly onclick="this.select();" style="font-family: monospace; font-size: 13px; border-color: #ffb703;" />
+        <p class="hint" style="margin: 4px 0 0 0; font-size: 11px; color: var(--muted);">Shortlink instan TShort yang aman dan ringkas.</p>
+      </div>
+      
       <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
         <button type="button" class="btn" onclick="copyShareUrl()" style="flex: 1; min-width: 120px;">Salin Tautan</button>
         <button type="button" id="copyBypassBtn" class="btn secondary" onclick="copyShareBypassUrl()" style="flex: 1; min-width: 120px; display: none;">Salin Tautan + Sandi</button>
@@ -602,10 +609,11 @@
     document.getElementById('shareItemUuid').value = uuid;
     document.getElementById('shareItemName').innerText = name;
     
-    // Tarik data terdekripsi langsung dari DOM
-    var title = document.getElementById('title-' + uuid).innerText;
-    var body = document.getElementById('body-' + uuid).innerText;
-    var category = document.getElementById('cat-' + uuid).innerText;
+    // Cari data catatan terdekripsi dari array allNotes di memori
+    var noteObj = allNotes.find(function(n) { return n.uuid === uuid; });
+    var title = noteObj ? noteObj.title : name;
+    var body = noteObj ? noteObj.body : '';
+    var category = noteObj ? noteObj.category : 'General';
 
     document.getElementById('sharedTitle').value = title;
     document.getElementById('sharedBody').value = body;
@@ -652,17 +660,34 @@
     var bypassSection = document.getElementById('bypassLinkSection');
     var copyBypassBtn = document.getElementById('copyBypassBtn');
     
+    var finalUrlForShort = fullUrl;
     if (plainPassword) {
       var encoded = base32Encode(plainPassword);
       var bypassUrl = fullUrl + '?pass=' + encoded;
       document.getElementById('activeShareBypassUrl').value = bypassUrl;
       bypassSection.style.display = 'block';
       copyBypassBtn.style.display = 'inline-block';
+      finalUrlForShort = bypassUrl;
     } else {
       bypassSection.style.display = 'none';
       copyBypassBtn.style.display = 'none';
     }
     
+    // Reset shortcode section
+    document.getElementById('tshortLinkSection').style.display = 'none';
+    
+    // Fetch TShort shortcode
+    fetch(window.location.origin + '/share/' + shareUuid + '/shortcode-data')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success && data.short_code) {
+          var tshortUrl = window.location.origin + '/s/' + data.short_code;
+          document.getElementById('activeShareShortUrl').value = tshortUrl;
+          document.getElementById('tshortLinkSection').style.display = 'block';
+        }
+      })
+      .catch(function(err) { console.error("Gagal memuat TShort code:", err); });
+
     var form = document.getElementById('revokeShareForm');
     form.action = '/share/' + shareUuid + '/revoke';
     document.getElementById('revokeRedirect').value = currentUrl;
