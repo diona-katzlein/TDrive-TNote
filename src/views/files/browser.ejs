@@ -219,12 +219,10 @@
         <td class="actions">
           <!-- Share Button -->
           <% if (sharesMap.folder[f.id]) { %>
-            <button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok);" onclick="showActiveShare('<%= f.name.replace(/'/g, '\\\'') %>', '<%= sharesMap.folder[f.id] %>')">🔗 Tautan Aktif</button>
+            <button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok);" onclick="showActiveShare('<%= f.name.replace(/'/g, '\\\'') %>', '<%= sharesMap.folder[f.id] %>', null, 'folder', '<%= f.uuid %>')">🔗 Tautan Aktif</button>
           <% } else { %>
             <button type="button" class="btn small ghost" onclick="openShareModal('folder', '<%= f.uuid %>', '<%= f.name.replace(/'/g, '\\\'') %>')">🔗 Bagikan</button>
           <% } %>
-
-          <button type="button" class="btn small ghost" onclick="openWorkspaceModal('folder', '<%= f.uuid %>', '<%= f.name.replace(/'/g, '\\\'') %>')">👥 Kolaborasi</button>
 
           <button type="button" class="btn small ghost"
             onclick="renameFolder('<%= f.uuid %>', '<%= f.name.replace(/'/g, "\\'") %>')">Rename</button>
@@ -261,7 +259,7 @@
 
           <!-- Share Button -->
           <% if (sharesMap.file[file.id]) { %>
-            <button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok);" onclick="showActiveShare('<%= file.name.replace(/'/g, '\\\'') %>', '<%= sharesMap.file[file.id] %>')">🔗 Tautan Aktif</button>
+            <button type="button" class="btn small ghost" style="color: var(--ok); border-color: var(--ok);" onclick="showActiveShare('<%= file.name.replace(/'/g, '\\\'') %>', '<%= sharesMap.file[file.id] %>', null, 'file', '<%= file.uuid %>')">🔗 Tautan Aktif</button>
           <% } else { %>
             <button type="button" class="btn small ghost" onclick="openShareModal('file', '<%= file.uuid %>', '<%= file.name.replace(/'/g, '\\\'') %>')">🔗 Bagikan</button>
           <% } %>
@@ -362,6 +360,19 @@
         <label style="color: var(--accent); font-weight: 700;">🔗 Tautan Auto-Bypass (Include Sandi Base32)</label>
         <input type="text" id="activeShareBypassUrl" readonly onclick="this.select();" style="font-family: monospace; font-size: 13px; border-color: var(--accent);" />
         <p class="hint" style="margin: 4px 0 0 0; font-size: 11px; color: var(--muted);">Tautan ini menyertakan password ter-encode Base32 sehingga penerima tidak perlu mengetikkan password lagi.</p>
+      </div>
+      
+      <!-- Opsi Shortlink Telegram t.me -->
+      <div id="telegramShortlinkSection" style="margin-top: 14px; display: none;">
+        <label style="color: #24a1de; font-weight: 700;">✈️ Tautan Pesan Telegram (t.me/c)</label>
+        <input type="text" id="activeShareTelegramUrl" readonly onclick="this.select();" style="font-family: monospace; font-size: 13px; border-color: #24a1de;" />
+        <p class="hint" style="margin: 4px 0 0 0; font-size: 11px; color: var(--muted);">Tautan langsung menuju ke pesan berkas yang disimpan di Telegram Chat/Channel Anda.</p>
+      </div>
+
+      <div id="telegramIvSection" style="margin-top: 14px; display: none;">
+        <label style="color: #24a1de; font-weight: 700;">⚡ Tautan Telegram Instant View (t.me/iv)</label>
+        <input type="text" id="activeShareIvUrl" readonly onclick="this.select();" style="font-family: monospace; font-size: 13px; border-color: #24a1de;" />
+        <p class="hint" style="margin: 4px 0 0 0; font-size: 11px; color: var(--muted);">Shortlink berformat Instant View Redirect untuk mempercepat pemuatan tautan publik.</p>
       </div>
       
       <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
@@ -529,7 +540,7 @@
     return result;
   }
 
-  function showActiveShare(name, shareUuid, plainPassword) {
+  function showActiveShare(name, shareUuid, plainPassword, itemType, itemUuid) {
     var fullUrl = window.location.origin + '/share/' + shareUuid;
     document.getElementById('activeShareItemName').innerText = name;
     document.getElementById('activeShareUrl').value = fullUrl;
@@ -537,15 +548,67 @@
     var bypassSection = document.getElementById('bypassLinkSection');
     var copyBypassBtn = document.getElementById('copyBypassBtn');
     
+    var finalShareUrl = fullUrl;
     if (plainPassword) {
       var encoded = base32Encode(plainPassword);
       var bypassUrl = fullUrl + '?pass=' + encoded;
       document.getElementById('activeShareBypassUrl').value = bypassUrl;
       bypassSection.style.display = 'block';
       copyBypassBtn.style.display = 'inline-block';
+      finalShareUrl = bypassUrl; // Gunakan link bypass untuk Instant View
     } else {
       bypassSection.style.display = 'none';
       copyBypassBtn.style.display = 'none';
+    }
+    
+    // Sembunyikan default shortlink section
+    document.getElementById('telegramShortlinkSection').style.display = 'none';
+    document.getElementById('telegramIvSection').style.display = 'none';
+
+    // Jika item adalah file, ambil data chunk untuk shortlink Telegram
+    if (itemType === 'file' && itemUuid) {
+      fetch('/drive/file/' + itemUuid + '/link-data')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.success && data.message_id) {
+            var peerStr = data.peer || 'me';
+            var cleanChannelId = '';
+            
+            // Format t.me/c/ hanya bekerja untuk channel/supergroup.
+            // ID channel di database diawali dengan -100 (mis. -1002082218882)
+            try {
+              var parsedPeer = JSON.parse(peerStr);
+              var rawId = String(parsedPeer.channelId || parsedPeer.chatId || '');
+              if (rawId.startsWith('-100')) {
+                cleanChannelId = rawId.substring(4);
+              } else if (rawId.startsWith('-')) {
+                cleanChannelId = rawId.substring(1);
+              } else {
+                cleanChannelId = rawId;
+              }
+            } catch (_) {
+              if (peerStr.startsWith('-100')) {
+                cleanChannelId = peerStr.substring(4);
+              } else if (peerStr.startsWith('-')) {
+                cleanChannelId = peerStr.substring(1);
+              } else {
+                cleanChannelId = peerStr;
+              }
+            }
+
+            if (cleanChannelId && cleanChannelId !== 'me' && cleanChannelId !== 'Saved Messages') {
+              var tmeUrl = 'https://t.me/c/' + cleanChannelId + '/' + data.message_id;
+              document.getElementById('activeShareTelegramUrl').value = tmeUrl;
+              document.getElementById('telegramShortlinkSection').style.display = 'block';
+            }
+          }
+        })
+        .catch(function(err) { console.error('Gagal mengambil shortlink data:', err); });
+        
+      // Selalu tampilkan opsi Instant View t.me/iv dengan format Telegram instant view
+      var tmeIvUrl = 'https://t.me/iv?url=' + encodeURIComponent(finalShareUrl) + '&rhash=1234567890';
+      document.getElementById('activeShareIvUrl').value = tmeIvUrl;
+      document.getElementById('telegramIvSection').style.display = 'block';
     }
     
     // Setup revoke form

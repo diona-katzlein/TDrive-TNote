@@ -125,7 +125,7 @@ app.use('/accounts', accountsRouter);
 app.use('/folders', foldersRouter);
 app.use('/drive', filesRouter);
 app.use('/notes', notesRouter);
-app.use('/workspace', workspaceRouter);
+// app.use('/workspace', workspaceRouter);
 app.use('/audit-trail-logs', auditLogsRouter);
 app.use('/backup', backupRouter);
 

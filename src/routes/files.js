@@ -306,6 +306,35 @@ router.post('/file/:uuid/rename', async (req, res) => {
   }
 });
 
+// Ambil data detail chunk (message_id, peer target) untuk shortlink Telegram t.me
+router.get('/file/:uuid/link-data', async (req, res) => {
+  const { uuid } = req.params;
+  try {
+    const file = await fileService.getFileByUuid(uuid);
+    if (!file || file.account_id !== req.activeAccount.id) {
+      return res.status(404).json({ error: 'Berkas tidak ditemukan.' });
+    }
+
+    // Ambil data chunk pertama (part_index = 0)
+    const [chunks] = await db.query(
+      'SELECT message_id, peer FROM file_chunks WHERE file_id = ? AND part_index = 0',
+      [file.id]
+    );
+
+    if (chunks.length === 0) {
+      return res.json({ success: false, message: 'Chunk berkas belum diunggah.' });
+    }
+
+    res.json({
+      success: true,
+      message_id: chunks[0].message_id,
+      peer: chunks[0].peer
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Pindahkan File
 router.post('/file/:uuid/move', async (req, res) => {
   const { uuid } = req.params;
