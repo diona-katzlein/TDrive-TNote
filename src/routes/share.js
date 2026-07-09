@@ -211,7 +211,7 @@ router.get('/:uuid', async (req, res) => {
     share.views_count += 1;
 
     // Log aksi publik
-    await auditService.log(null, 'ACCESS_SHARE', `Mengakses share publik UUID: ${uuid} (Tipe: ${share.item_type})`);
+    await auditService.log(req, 'ACCESS_SHARE', `Mengakses share publik UUID: ${uuid} (Tipe: ${share.item_type})`);
 
     // Render berdasarkan tipe
     if (share.item_type === 'note') {
@@ -286,7 +286,7 @@ router.get('/:uuid/download', async (req, res) => {
     res.setHeader('Content-Length', file.size);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
 
-    await auditService.log(null, 'DOWNLOAD_SHARE_FILE', `Mengunduh berkas publik: ${file.name} (Share: ${uuid})`);
+    await auditService.log(req, 'DOWNLOAD_SHARE_FILE', `Mengunduh berkas publik: ${file.name} (Share: ${uuid})`);
     await storageService.downloadToStream(account, file, res);
     res.end();
   } catch (err) {
@@ -320,7 +320,7 @@ router.get('/:uuid/preview', async (req, res) => {
     res.setHeader('Accept-Ranges', 'none');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
 
-    await auditService.log(null, 'PREVIEW_SHARE_FILE', `Pratinjau berkas publik: ${file.name} (Share: ${uuid})`);
+    await auditService.log(req, 'PREVIEW_SHARE_FILE', `Pratinjau berkas publik: ${file.name} (Share: ${uuid})`);
     await storageService.downloadToStream(account, file, res);
     res.end();
   } catch (err) {
@@ -487,7 +487,7 @@ router.get('/:share_uuid/file/:file_uuid/download', async (req, res) => {
     res.setHeader('Content-Length', file.size);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
 
-    await auditService.log(null, 'DOWNLOAD_SHARE_FILE', `Mengunduh berkas publik di dalam folder: ${file.name} (Share: ${share_uuid})`);
+    await auditService.log(req, 'DOWNLOAD_SHARE_FILE', `Mengunduh berkas publik di dalam folder: ${file.name} (Share: ${share_uuid})`);
     await storageService.downloadToStream(account, file, res);
     res.end();
   } catch (err) {
