@@ -124,12 +124,27 @@ router.post('/:uuid/revoke', async (req, res) => {
 // Form Verifikasi Sandi Share
 router.get('/:uuid/unlock', async (req, res) => {
   const { uuid } = req.params;
+  const { pass } = req.query;
   try {
     const [shares] = await db.query('SELECT * FROM shares WHERE uuid = ?', [uuid]);
     const share = shares[0];
     if (!share || !isShareActive(share)) {
       return res.status(404).send('Tautan berbagi tidak ditemukan atau sudah kedaluwarsa.');
     }
+
+    // Coba bypass otomatis via parameter '?pass='
+    if (pass && share.password_hash) {
+      try {
+        const base32 = require('base32');
+        const plainPassword = base32.decode(pass).toString('utf8').trim();
+        if (plainPassword && cryptoService.verifyPassword(plainPassword, share.password_hash)) {
+          req.session.unlockedShares = req.session.unlockedShares || {};
+          req.session.unlockedShares[uuid] = true;
+          return res.redirect(`/share/${uuid}`);
+        }
+      } catch (_) {}
+    }
+
     res.render('shares/password', { title: 'Verifikasi Sandi Berbagi', uuid, error: null, csrfToken: res.locals.csrfToken });
   } catch (err) {
     res.status(500).send('Terjadi kesalahan.');
@@ -187,7 +202,7 @@ router.get('/:uuid', async (req, res) => {
 
       const unlocked = req.session.unlockedShares && req.session.unlockedShares[uuid];
       if (!unlocked) {
-        return res.redirect(`/share/${uuid}/unlock`);
+        return res.redirect(`/share/${uuid}/unlock` + (req.query.pass ? `?pass=${req.query.pass}` : ''));
       }
     }
 

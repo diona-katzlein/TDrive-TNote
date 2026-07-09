@@ -176,11 +176,22 @@
       } else if (isAudio) {
         html = '<audio controls autoplay style="width: 100%; max-height: 70vh; outline: none; margin: 20px 0;"><source src="' + previewUrl + '" type="' + previewMime + '">Browser Anda tidak mendukung audio HTML5.</audio>';
       } else if (isPdf) {
-        html = '<iframe src="' + previewUrl + '" style="width: 100%; height: 75vh; border: none; background: #fff; border-radius: 4px;"></iframe>';
+        // Render PDF menggunakan tag <embed> bawaan browser agar tidak bergantung pada server luar
+        html = '<embed src="' + previewUrl + '" type="application/pdf" style="width: 100%; height: 75vh; border-radius: 4px;" />';
       } else if (isDoc) {
-        // Gunakan Google Docs Viewer untuk menampilkan Excel/Docs/Word yang disimpan di server publik secara instan
-        var viewerUrl = 'https://docs.google.com/gview?url=' + encodeURIComponent(downloadUrl) + '&embedded=true';
-        html = '<iframe src="' + viewerUrl + '" style="width: 100%; height: 75vh; border: none; background: #fff; border-radius: 4px;"></iframe>';
+        // Tampilkan link alternatif menggunakan Office Online Viewer dan Google Docs Viewer
+        var officeUrl = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(downloadUrl);
+        var googleUrl = 'https://docs.google.com/gview?url=' + encodeURIComponent(downloadUrl) + '&embedded=true';
+        
+        html = '<div style="width: 100%; display: flex; flex-direction: column; gap: 10px;">' +
+               '  <div style="background: var(--panel-2); padding: 8px; border-radius: 4px; display: flex; justify-content: center; gap: 14px; font-size: 12px;">' +
+               '    <span style="color: var(--muted);">Alternative Readers:</span>' +
+               '    <a href="#" onclick="document.getElementById(\'docIframe\').src=\'' + officeUrl + '\'; return false;" style="color: var(--accent); font-weight: 700;">Microsoft Office Online</a>' +
+               '    <span style="color: var(--border);">|</span>' +
+               '    <a href="#" onclick="document.getElementById(\'docIframe\').src=\'' + googleUrl + '\'; return false;" style="color: var(--accent); font-weight: 700;">Google Docs Viewer</a>' +
+               '  </div>' +
+               '  <iframe id="docIframe" src="' + officeUrl + '" style="width: 100%; height: 75vh; border: none; background: #fff; border-radius: 4px;"></iframe>' +
+               '</div>';
       }
       
       container.innerHTML = html;
