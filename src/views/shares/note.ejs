@@ -29,15 +29,11 @@
     font-size: 15px;
     line-height: 1.7;
     color: var(--text);
-    white-space: pre-wrap;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
-    min-height: 250px;
   }
   .note-view-footer {
-    margin-top: 20px;
+    margin-top: 25px;
+    border-top: 1px solid var(--border);
+    padding-top: 15px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -52,20 +48,137 @@
     border-radius: 20px;
     font-weight: 600;
   }
+  
+  /* Link Type Styling */
+  .link-card {
+    background: #0f141c;
+    border: 1px dashed #2ea6ff;
+    padding: 35px 20px;
+    border-radius: 10px;
+    text-align: center;
+    margin: 20px 0;
+  }
+  .link-btn {
+    display: inline-block;
+    background: #2ea6ff;
+    color: #fff;
+    font-weight: 700;
+    padding: 12px 28px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 16px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 0 15px rgba(46, 166, 255, 0.4);
+  }
+  .link-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px rgba(46, 166, 255, 0.7);
+  }
+  
+  /* Code Terminal Styling */
+  .terminal-box {
+    background: #121214;
+    border: 1px solid #2d2d30;
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 20px 0;
+  }
+  .terminal-header {
+    background: #1e1e1f;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #2d2d30;
+  }
+  .terminal-title {
+    font-family: monospace;
+    font-size: 13px;
+    color: #a8a8b2;
+  }
+  .terminal-pre {
+    margin: 0;
+    padding: 20px;
+    overflow-x: auto;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #39ff14; /* Default Green */
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .terminal-pre.cmd-mode {
+    color: #ffb703; /* Yellow for CMD */
+  }
 </style>
 
 <div class="note-view-card">
   <div class="note-view-header">
-    <h2>📝 <%= note.title %></h2>
+    <h2>
+      <% if (note.note_type === 'link') { %>
+        🔗
+      <% } else if (note.note_type === 'cmd' || note.note_type === 'bash') { %>
+        💻
+      <% } else { %>
+        📝
+      <% } %>
+      <%= note.title %>
+    </h2>
     <span class="note-cat"><%= note.category || 'General' %></span>
   </div>
   
-  <div class="note-view-body"><%= note.body %></div>
+  <div class="note-view-body">
+    <% if (note.note_type === 'link') { %>
+      <% 
+        var url = note.body ? note.body.trim() : '#';
+        if (url !== '#' && !/^https?:\/\//i.test(url)) {
+          url = 'https://' + url;
+        }
+      %>
+      <div class="link-card">
+        <a href="<%= url %>" target="_blank" class="link-btn">🔗 Buka Tautan Asli</a>
+        <p style="margin: 15px 0 0 0; font-family: monospace; font-size: 13px; color: var(--muted); word-break: break-all;"><%= url %></p>
+      </div>
+      
+    <% } else if (note.note_type === 'cmd' || note.note_type === 'bash') { %>
+      <div class="terminal-box">
+        <div class="terminal-header">
+          <span class="terminal-title">
+            <%= note.note_type === 'cmd' ? 'Windows Command Prompt (CMD/BAT)' : 'Linux Bash Script' %>
+          </span>
+          <button class="btn small ghost" onclick="copyScriptCode()" style="padding: 4px 10px; font-size: 12px;">Salin Script</button>
+        </div>
+        <pre class="terminal-pre <%= note.note_type === 'cmd' ? 'cmd-mode' : '' %>" id="scriptArea"><%= note.body %></pre>
+      </div>
+      
+    <% } else { %>
+      <!-- Default Text / Markdown Render -->
+      <div style="background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; min-height: 250px; white-space: pre-wrap;"><%= note.body %></div>
+    <% } %>
+  </div>
   
   <div class="note-view-footer">
     <span>Diperbarui pada: <%= formatDate(note.updated_at) %></span>
-    <span style="display: flex; align-items: center; gap: 4px;">🔒 Catatan Terenkripsi E2E</span>
+    <span style="display: flex; align-items: center; gap: 4px;">🔒 TNote Terenkripsi E2E</span>
   </div>
 </div>
+
+<script>
+  function copyScriptCode() {
+    var codeText = document.getElementById('scriptArea').innerText;
+    navigator.clipboard.writeText(codeText).then(function() {
+      alert('Script disalin ke clipboard!');
+    }).catch(function() {
+      // Fallback
+      var input = document.createElement('textarea');
+      input.value = codeText;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      alert('Script disalin ke clipboard!');
+    });
+  }
+</script>
 
 <%- include('../partials/footer') %>

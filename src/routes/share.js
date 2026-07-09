@@ -152,10 +152,16 @@ router.post('/:uuid/revoke', async (req, res) => {
     const [shares] = await db.query('SELECT * FROM shares WHERE uuid = ?', [uuid]);
     const share = shares[0];
     if (share) {
+      // Hapus share
       await db.query('DELETE FROM shares WHERE uuid = ?', [uuid]);
-      await auditService.log(req, 'REVOKE_SHARE', `Menarik kembali (menghapus) share UUID: ${uuid}`);
+      
+      // Hapus TShort shortlink terkait secara otomatis
+      const targetUrlPath = `/share/${uuid}`;
+      await db.query('DELETE FROM shortlinks WHERE original_url LIKE ?', [`%${targetUrlPath}%`]);
+
+      await auditService.log(req, 'REVOKE_SHARE', `Menarik kembali (menghapus) share UUID: ${uuid} dan TShort shortlink terkait.`);
     }
-    res.redirect(redirectBack + (redirectBack.includes('?') ? '&' : '?') + 'notice=' + encodeURIComponent('Tautan berbagi telah dinonaktifkan.'));
+    res.redirect(redirectBack + (redirectBack.includes('?') ? '&' : '?') + 'notice=' + encodeURIComponent('Tautan berbagi dan TShort terkait telah dinonaktifkan.'));
   } catch (err) {
     res.redirect(redirectBack + (redirectBack.includes('?') ? '&' : '?') + 'error=' + encodeURIComponent(err.message));
   }
@@ -259,12 +265,22 @@ router.get('/:uuid', async (req, res) => {
 
     // Render berdasarkan tipe
     if (share.item_type === 'note') {
+      // Ambil note_type asli dari database tabel notes
+      let noteType = 'markdown';
+      try {
+        const [noteRows] = await db.query('SELECT note_type FROM notes WHERE id = ?', [share.item_id]);
+        if (noteRows.length > 0) {
+          noteType = noteRows[0].note_type;
+        }
+      } catch (_) {}
+
       return res.render('shares/note', {
         title: share.shared_title,
         note: {
           title: share.shared_title,
           body: share.shared_body,
           category: share.shared_category,
+          note_type: noteType,
           updated_at: share.created_at,
         }
       });
