@@ -128,6 +128,20 @@
   </div>
   
   <div class="note-view-body">
+    <% 
+      var isCodeType = ['cmd', 'bash', 'js', 'css', 'html', 'java', 'go', 'php', 'mysql'].includes(note.note_type);
+      var langLabelMap = {
+        'cmd': 'Windows Command Prompt (CMD/BAT)',
+        'bash': 'Linux Bash Script',
+        'js': 'JavaScript (Node.js)',
+        'css': 'CSS stylesheet',
+        'html': 'HTML Document',
+        'java': 'Java Source Code',
+        'go': 'Go Program',
+        'php': 'PHP Script',
+        'mysql': 'SQL / MySQL / MariaDB Query'
+      };
+    %>
     <% if (note.note_type === 'link') { %>
       <% 
         var url = note.body ? note.body.trim() : '#';
@@ -140,15 +154,15 @@
         <p style="margin: 15px 0 0 0; font-family: monospace; font-size: 13px; color: var(--muted); word-break: break-all;"><%= url %></p>
       </div>
       
-    <% } else if (note.note_type === 'cmd' || note.note_type === 'bash') { %>
+    <% } else if (isCodeType) { %>
       <div class="terminal-box">
         <div class="terminal-header">
           <span class="terminal-title">
-            <%= note.note_type === 'cmd' ? 'Windows Command Prompt (CMD/BAT)' : 'Linux Bash Script' %>
+            <%= langLabelMap[note.note_type] || 'Source Code' %>
           </span>
-          <button class="btn small ghost" onclick="copyScriptCode()" style="padding: 4px 10px; font-size: 12px;">Salin Script</button>
+          <button class="btn small ghost" onclick="copyScriptCode()" style="padding: 4px 10px; font-size: 12px;">Salin Kode</button>
         </div>
-        <pre class="terminal-pre <%= note.note_type === 'cmd' ? 'cmd-mode' : '' %>" id="scriptArea"><%= note.body %></pre>
+        <pre class="terminal-pre <%= note.note_type === 'cmd' ? 'cmd-mode' : '' %>" id="scriptArea" style="color: <%= (note.note_type==='js'||note.note_type==='html') ? '#ffd60a' : (note.note_type==='css'||note.note_type==='mysql'?'#64d2ff':'#30d158') %>;"><%= note.body %></pre>
       </div>
       
     <% } else { %>

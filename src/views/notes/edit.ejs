@@ -216,9 +216,16 @@
         <label class="hint" style="display: block; margin-bottom: 6px;">Jenis Catatan</label>
         <select name="note_type" class="editor-input" style="cursor: pointer; height: 47px;">
           <option value="markdown" <%= (note && note.note_type === 'markdown') ? 'selected' : '' %>>📝 Markdown / Teks</option>
-          <option value="cmd" <%= (note && note.note_type === 'cmd') ? 'selected' : '' %>>💻 Script CMD / BAT</option>
-          <option value="bash" <%= (note && note.note_type === 'bash') ? 'selected' : '' %>>🐧 Linux Bash Script</option>
           <option value="link" <%= (note && note.note_type === 'link') ? 'selected' : '' %>>🔗 Hanya Menyimpan Link (Tautan)</option>
+          <option value="cmd" <%= (note && note.note_type === 'cmd') ? 'selected' : '' %>>💻 Script Windows CMD / BAT</option>
+          <option value="bash" <%= (note && note.note_type === 'bash') ? 'selected' : '' %>>🐧 Linux Bash Script</option>
+          <option value="js" <%= (note && note.note_type === 'js') ? 'selected' : '' %>>💛 JavaScript (JS)</option>
+          <option value="css" <%= (note && note.note_type === 'css') ? 'selected' : '' %>>💙 CSS</option>
+          <option value="html" <%= (note && note.note_type === 'html') ? 'selected' : '' %>>🧡 HTML</option>
+          <option value="java" <%= (note && note.note_type === 'java') ? 'selected' : '' %>>☕ Java</option>
+          <option value="go" <%= (note && note.note_type === 'go') ? 'selected' : '' %>>🐹 Go Language</option>
+          <option value="php" <%= (note && note.note_type === 'php') ? 'selected' : '' %>>🐘 PHP</option>
+          <option value="mysql" <%= (note && note.note_type === 'mysql') ? 'selected' : '' %>>🐬 MySQL / MariaDB</option>
         </select>
       </div>
 
@@ -472,6 +479,12 @@
   // Panggil saat halaman diload
   window.addEventListener('DOMContentLoaded', function() {
     updateCharCount();
+    
+    // Inisialisasi status input kategori
+    var selector = document.getElementById('categorySelector');
+    if (selector) {
+      handleCategoryChange(selector.value);
+    }
   });
 
   function openShareNoteModal(uuid, name) {
