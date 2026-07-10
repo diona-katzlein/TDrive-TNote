@@ -268,10 +268,20 @@ router.get('/new', async (req, res) => {
     const notes = await noteService.listNotes(req.activeAccount.id, key);
     const categories = [...new Set(notes.map((n) => n.category).filter(Boolean))].sort();
     
-    const [channels] = await db.query(
+    let [channels] = await db.query(
       'SELECT * FROM user_channels WHERE account_id = ? ORDER BY created_at DESC',
       [req.activeAccount.id]
     );
+
+    // Parse channel_id secara aman di backend
+    channels = channels.map(c => {
+      let displayId = c.channel_id;
+      try {
+        const parsed = JSON.parse(c.channel_id);
+        displayId = parsed.channelId;
+      } catch (err) {}
+      return { ...c, displayId };
+    });
 
     res.render('notes/edit', {
       title: 'Catatan Baru',
@@ -341,10 +351,20 @@ router.get('/:uuid', async (req, res) => {
       sharesMap[note.id] = shares[0].uuid;
     }
 
-    const [channels] = await db.query(
+    let [channels] = await db.query(
       'SELECT * FROM user_channels WHERE account_id = ? ORDER BY created_at DESC',
       [req.activeAccount.id]
     );
+
+    // Parse channel_id secara aman di backend
+    channels = channels.map(c => {
+      let displayId = c.channel_id;
+      try {
+        const parsed = JSON.parse(c.channel_id);
+        displayId = parsed.channelId;
+      } catch (err) {}
+      return { ...c, displayId };
+    });
 
     res.render('notes/edit', {
       title: note.title,
