@@ -361,48 +361,6 @@
     </div>
   </div>
 </div>
-
-<!-- MODAL: MEMBAGIKAN CATATAN (SHARED MODAL) -->
-<div id="shareModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
-  <div class="modal-card" style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 480px; padding: 24px;">
-    <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 18px;">
-      <h3 id="shareTitle" style="margin: 0; font-size: 18px;">Bagikan Catatan</h3>
-      <button class="modal-close" onclick="closeShareModal()" style="background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer;">&times;</button>
-    </div>
-    <form method="POST" action="/share/create" class="form">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-      <input type="hidden" name="redirect" id="shareRedirect" />
-      <input type="hidden" name="item_type" value="note" />
-      <input type="hidden" name="item_uuid" id="shareItemUuid" />
-
-      <!-- Payload terdekripsi dikirim ke server untuk share publik -->
-      <input type="hidden" name="shared_title" id="sharedTitle" />
-      <input type="hidden" name="shared_body" id="sharedBody" />
-      <input type="hidden" name="shared_category" id="sharedCategory" />
-
-      <!-- Honeypot -->
-      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" style="display: none;" />
-
-      <p class="hint" style="margin-top: 0; margin-bottom: 15px;">Membagikan: <strong id="shareItemName" style="color: var(--text);">Catatan</strong></p>
-
-      <label style="display: block; margin-bottom: 12px;">Proteksi Sandi (Opsional)
-        <input type="password" name="password" placeholder="Masukkan kata sandi share" style="width: 100%; margin-top: 6px;" />
-      </label>
-
-      <label style="display: block; margin-bottom: 12px;">Masa Berlaku (Jam, Opsional)
-        <input type="number" name="expires_in_hours" min="1" placeholder="Mis. 24 (kosong = selamanya)" style="width: 100%; margin-top: 6px;" />
-      </label>
-
-      <label style="display: block; margin-bottom: 12px;">Batas Maksimal Dibuka (Kali, Opsional)
-        <input type="number" name="max_views" min="1" placeholder="Mis. 5 (kosong = tak terbatas)" style="width: 100%; margin-top: 6px;" />
-      </label>
-
-      <div style="margin-top: 20px; display: flex; gap: 10px;">
-        <button class="btn" type="submit" style="flex: 1;">Buat Tautan Berbagi</button>
-        <button class="btn ghost" type="button" onclick="closeShareModal()" style="flex: 1;">Batal</button>
-      </div>
-    </form>
-  </div>
 </div>
 <!-- MODAL: KELOLA WORKSPACE KOLABORASI -->
 <!-- ---------------------------------------------------- -->
@@ -431,7 +389,7 @@
           <option value="write">Tulis &amp; Baca (Write)</option>
         </select>
       </label>
-
+      
       <div style="margin-top: 15px; display: flex; gap: 10px;">
         <button class="btn" type="submit" style="flex: 1;">Undang</button>
         <button class="btn ghost" type="button" onclick="closeWorkspaceModal()">Batal</button>
@@ -439,6 +397,7 @@
     </form>
   </div>
 </div>
+<% } %>
 
 <!-- SCRIPT JAVASCRIPT GLOBAL (Untuk Catatan Baru & Edit Catatan) -->
 <script>
