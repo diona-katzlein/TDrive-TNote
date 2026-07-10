@@ -447,6 +447,7 @@
   </div>
 </div>
 
+<!-- SCRIPT JAVASCRIPT GLOBAL (Untuk Catatan Baru & Edit Catatan) -->
 <script>
   var currentUrl = window.location.pathname + window.location.search;
 
@@ -486,7 +487,11 @@
       handleCategoryChange(selector.value);
     }
   });
+</script>
 
+<!-- SCRIPT JAVASCRIPT KHUSUS (Hanya dimuat jika sedang mengedit catatan aktif) -->
+<% if (note) { %>
+<script>
   function openShareNoteModal(uuid, name) {
     document.getElementById('shareItemUuid').value = uuid;
     document.getElementById('shareItemName').innerText = name;
