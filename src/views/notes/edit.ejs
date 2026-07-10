@@ -243,7 +243,7 @@
               try {
                 var parsed = JSON.parse(c.channel_id);
                 displayId = parsed.channelId;
-              } catch (_) {}
+              } catch (err) {}
             %>
             <option value="<%= c.channel_id %>" <%= activePeer === c.channel_id ? 'selected' : '' %>><%= c.title %> (ID: <%= displayId %>)</option>
           <% }); %>
