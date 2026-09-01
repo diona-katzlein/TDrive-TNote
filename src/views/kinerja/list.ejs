@@ -4,91 +4,139 @@
   .kinerja-head { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:20px; }
   .kinerja-card { overflow-x:auto; }
   .kinerja-thumb { width:74px; height:58px; object-fit:cover; border-radius:8px; border:1px solid var(--border); }
-  .kinerja-actions { display:flex; gap:7px; flex-wrap:wrap; }
+  .kinerja-actions { display:flex; gap:7px; flex-wrap:wrap; align-items:center; }
+  .folder-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px; }
+  .folder-card { display:block; color:var(--text); padding:18px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); }
+  .folder-card:hover { border-color:var(--accent); text-decoration:none; }
+  .folder-title { display:block; font-weight:750; margin-bottom:7px; }
   .share-box { margin-top:8px; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--panel-2); }
   .share-box input { width:100%; margin:4px 0; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:7px; }
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:1000; align-items:center; justify-content:center; padding:20px; }
   .modal-card { width:100%; max-width:480px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:22px; }
+  .password-row { display:flex; gap:8px; }
+  .password-row input { flex:1; }
   @media (max-width:700px) { .kinerja-head { align-items:flex-start; flex-direction:column; } }
 </style>
 
 <div class="kinerja-head">
   <div>
     <h1 style="margin:0;">📋 TKinerja</h1>
-    <p class="hint" style="margin:5px 0 0;">Laporan bukti dukung kinerja yang tersusun otomatis per bulan dan tanggal.</p>
+    <p class="hint" style="margin:5px 0 0;">Laporan bukti dukung tersusun per bulan, tanggal, lalu kegiatan.</p>
   </div>
   <a class="btn" href="/kinerja/new">+ Buat Laporan</a>
 </div>
 
 <% if (error) { %><div class="alert error"><%= error %></div><% } %>
 <% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+<% if (createdPassword) { %>
+  <div class="alert info">
+    <strong>Password share baru:</strong>
+    <code id="createdPassword"><%= createdPassword %></code>
+    <button class="btn small" type="button" onclick="copyText(document.getElementById('createdPassword').textContent)">Salin Password</button>
+    <div class="hint">Simpan password ini sekarang. Sistem hanya menyimpan hash dan tidak dapat menampilkannya kembali.</div>
+  </div>
+<% } %>
 
-<div class="card kinerja-card">
-  <table class="grid">
-    <thead><tr><th>Tanggal</th><th>Kegiatan</th><th>Waktu</th><th>Bukti</th><th>Aksi</th></tr></thead>
-    <tbody>
-      <% reports.forEach(function(r) { %>
-        <tr>
-          <td><strong><%= String(r.activity_date).slice(0, 10) %></strong></td>
-          <td>
-            <strong><%= r.title %></strong>
-            <% if (r.description) { %><div class="hint"><%= r.description.length > 110 ? r.description.slice(0, 110) + '…' : r.description %></div><% } %>
-          </td>
-          <td><%= String(r.start_time).slice(0,5) %>–<%= String(r.end_time).slice(0,5) %></td>
-          <td>
-            <% if (r.evidence_uuid) { %><a href="/kinerja/<%= r.uuid %>/evidence" target="_blank"><img class="kinerja-thumb" src="/kinerja/<%= r.uuid %>/evidence" alt="Bukti <%= r.title %>"></a><% } else { %><span class="hint">Tanpa gambar</span><% } %>
-          </td>
-          <td>
-            <div class="kinerja-actions">
-              <a class="btn small ghost" href="/kinerja/<%= r.uuid %>/edit">Edit</a>
-              <% if (!r.share_uuid) { %>
-                <button class="btn small ghost" type="button" data-uuid="<%= r.uuid %>" data-title="<%= r.title %>" onclick="openShare(this.dataset.uuid, this.dataset.title)">🔗 Share</button>
-              <% } %>
-              <form method="POST" action="/kinerja/<%= r.uuid %>/delete" onsubmit="return confirm('Hapus laporan dan bukti gambarnya?');">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small danger">Hapus</button>
-              </form>
-            </div>
-            <% if (r.share_uuid) { %>
-              <div class="share-box">
-                <small style="color:var(--ok);">● Share aktif</small>
-                <input readonly value="<%= domain %>/s/<%= r.short_code %>" onclick="this.select()">
-                <div class="kinerja-actions">
-                  <button class="btn small" type="button" onclick="navigator.clipboard.writeText('<%= domain %>/s/<%= r.short_code %>')">Salin TShort</button>
-                  <form method="POST" action="/share/<%= r.share_uuid %>/revoke">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="redirect" value="/kinerja">
-                    <button class="btn small danger">Cabut</button>
-                  </form>
-                </div>
+<nav class="breadcrumb" style="margin-bottom:18px;">
+  <a href="/kinerja">TKinerja</a>
+  <% if (selectedMonth) { %><span> / </span><a href="/kinerja/month/<%= selectedMonth.year %>/<%= selectedMonth.month %>"><%= selectedMonth.folder_name %>-<%= selectedMonth.year %></a><% } %>
+  <% if (selectedDate) { %><span> / </span><span><%= selectedDate.label %></span><% } %>
+</nav>
+
+<% if (viewMode === 'months') { %>
+  <div class="folder-grid">
+    <% months.forEach(function(m) { %>
+      <a class="folder-card" href="/kinerja/month/<%= m.year_number %>/<%= String(m.month_number).padStart(2, '0') %>">
+        <span class="folder-title">📁 <%= m.folder_name %>-<%= m.year_number %></span>
+        <span class="hint"><%= m.date_count %> tanggal · <%= m.report_count %> laporan</span>
+      </a>
+    <% }); %>
+  </div>
+  <% if (!months.length) { %><div class="card empty">Belum ada laporan. <a class="btn" href="/kinerja/new">Buat Laporan</a></div><% } %>
+<% } %>
+
+<% if (viewMode === 'dates') { %>
+  <div class="folder-grid">
+    <% dates.forEach(function(d) { var parts = d.date_key.split('-'); %>
+      <a class="folder-card" href="/kinerja/date/<%= d.date_key %>">
+        <span class="folder-title">📁 <%= parts[2] %>-<%= parts[1] %>-<%= parts[0] %></span>
+        <span class="hint"><%= d.report_count %> laporan · <%= d.evidence_count %> bukti gambar</span>
+      </a>
+    <% }); %>
+  </div>
+  <% if (!dates.length) { %><div class="card empty">Tidak ada laporan pada bulan ini.</div><% } %>
+<% } %>
+
+<% if (viewMode === 'reports') { %>
+  <div class="card kinerja-card">
+    <table class="grid">
+      <thead><tr><th>Kegiatan</th><th>Waktu</th><th>Bukti</th><th>Aksi</th></tr></thead>
+      <tbody>
+        <% reports.forEach(function(r) { %>
+          <tr>
+            <td><strong><%= r.title %></strong><% if (r.description) { %><div class="hint"><%= r.description.length > 110 ? r.description.slice(0, 110) + '…' : r.description %></div><% } %></td>
+            <td><%= String(r.start_time).slice(0,5) %>–<%= String(r.end_time).slice(0,5) %></td>
+            <td><% if (r.evidence_uuid) { %><a href="/kinerja/<%= r.uuid %>/evidence" target="_blank"><img class="kinerja-thumb" src="/kinerja/<%= r.uuid %>/evidence" alt="Bukti <%= r.title %>"></a><% } else { %><span class="hint">Tanpa gambar</span><% } %></td>
+            <td>
+              <div class="kinerja-actions">
+                <a class="btn small ghost" href="/kinerja/<%= r.uuid %>/edit">Edit</a>
+                <% if (!r.share_uuid) { %><button class="btn small ghost" type="button" data-uuid="<%= r.uuid %>" data-title="<%= r.title %>" onclick="openShare(this.dataset.uuid,this.dataset.title)">🔗 Share</button><% } %>
+                <form method="POST" action="/kinerja/<%= r.uuid %>/delete" onsubmit="return confirm('Hapus laporan dan bukti gambarnya?');"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small danger">Hapus</button></form>
               </div>
-            <% } %>
-          </td>
-        </tr>
-      <% }); %>
-      <% if (!reports.length) { %><tr><td colspan="5" class="empty-row">Belum ada laporan. Klik “Buat Laporan” untuk mulai.</td></tr><% } %>
-    </tbody>
-  </table>
-</div>
+              <% if (r.share_uuid) { %>
+                <div class="share-box">
+                  <small style="color:var(--ok);">● Share aktif dan dilindungi password</small>
+                  <input readonly value="<%= domain %>/s/<%= r.short_code %>" onclick="this.select()">
+                  <div class="kinerja-actions">
+                    <button class="btn small" type="button" data-url="<%= domain %>/s/<%= r.short_code %>" onclick="copyText(this.dataset.url)">Salin TShort</button>
+                    <button class="btn small ghost" type="button" data-uuid="<%= r.share_uuid %>" data-title="<%= r.title %>" onclick="openPassword(this.dataset.uuid,this.dataset.title)">Ganti Password</button>
+                    <form method="POST" action="/share/<%= r.share_uuid %>/revoke"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="redirect" value="/kinerja/date/<%= selectedDate.key %>"><button class="btn small danger">Cabut</button></form>
+                  </div>
+                </div>
+              <% } %>
+            </td>
+          </tr>
+        <% }); %>
+        <% if (!reports.length) { %><tr><td colspan="4" class="empty-row">Tidak ada laporan pada tanggal ini.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+<% } %>
 
 <div id="shareModal" class="modal-overlay">
   <div class="modal-card">
     <h3 style="margin-top:0;">Bagikan Laporan TKinerja</h3>
     <p class="hint">Laporan: <strong id="shareName"></strong></p>
     <form class="form" method="POST" action="/share/create">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="redirect" value="/kinerja">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="redirect" value="<%= selectedDate ? '/kinerja/date/' + selectedDate.key : '/kinerja' %>">
       <input type="hidden" name="item_type" value="kinerja"><input type="hidden" name="item_uuid" id="shareUuid">
-      <label>Password (opsional)<input type="password" name="password" placeholder="Kosongkan jika tanpa password"></label>
-      <label>Masa berlaku
-        <select name="expires_in_hours" style="padding:10px;background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:8px;">
-          <option value="">No expired (selamanya)</option><option value="24">24 jam</option><option value="168">7 hari</option><option value="720">30 hari</option>
-        </select>
-      </label>
-      <div class="form-actions"><button class="btn">Buat TShort</button><button class="btn ghost" type="button" onclick="closeShare()">Batal</button></div>
+      <label>Password wajib (8 huruf/angka)<div class="password-row"><input id="sharePassword" type="text" name="password" required minlength="8" maxlength="8" pattern="[A-Za-z0-9]{8}" autocomplete="new-password"><button class="btn ghost" type="button" onclick="setRandomPassword('sharePassword')">Acak</button></div></label>
+      <label>Masa berlaku<select name="expires_in_hours" style="padding:10px;background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:8px;"><option value="">No expired (selamanya)</option><option value="24">24 jam</option><option value="168">7 hari</option><option value="720">30 hari</option></select></label>
+      <div class="form-actions"><button class="btn">Buat TShort</button><button class="btn ghost" type="button" onclick="closeModal('shareModal')">Batal</button></div>
     </form>
   </div>
 </div>
+
+<div id="passwordModal" class="modal-overlay">
+  <div class="modal-card">
+    <h3 style="margin-top:0;">Ganti Password Share</h3>
+    <p class="hint">Laporan: <strong id="passwordName"></strong></p>
+    <form id="passwordForm" class="form" method="POST">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="redirect" value="<%= selectedDate ? '/kinerja/date/' + selectedDate.key : '/kinerja' %>">
+      <label>Password baru (8 huruf/angka)<div class="password-row"><input id="newPassword" type="text" name="password" required minlength="8" maxlength="8" pattern="[A-Za-z0-9]{8}" autocomplete="new-password"><button class="btn ghost" type="button" onclick="setRandomPassword('newPassword')">Acak</button></div></label>
+      <p class="hint">TShort yang sama akan diperbarui agar otomatis masuk menggunakan password baru.</p>
+      <div class="form-actions"><button class="btn">Simpan Password</button><button class="btn ghost" type="button" onclick="closeModal('passwordModal')">Batal</button></div>
+    </form>
+  </div>
+</div>
+
 <script>
-function openShare(uuid,name){document.getElementById('shareUuid').value=uuid;document.getElementById('shareName').textContent=name;document.getElementById('shareModal').style.display='flex';}
-function closeShare(){document.getElementById('shareModal').style.display='none';}
+function randomPassword(){var chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',value='';var bytes=new Uint32Array(8);crypto.getRandomValues(bytes);for(var i=0;i<8;i++)value+=chars[bytes[i]%chars.length];return value;}
+function setRandomPassword(id){document.getElementById(id).value=randomPassword();}
+function openShare(uuid,name){document.getElementById('shareUuid').value=uuid;document.getElementById('shareName').textContent=name;setRandomPassword('sharePassword');document.getElementById('shareModal').style.display='flex';}
+function openPassword(uuid,name){document.getElementById('passwordName').textContent=name;document.getElementById('passwordForm').action='/share/'+encodeURIComponent(uuid)+'/password';setRandomPassword('newPassword');document.getElementById('passwordModal').style.display='flex';}
+function closeModal(id){document.getElementById(id).style.display='none';}
+function copyText(value){navigator.clipboard.writeText(value);}
 </script>
 
 <%- include('../partials/footer') %>

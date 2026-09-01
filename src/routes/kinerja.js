@@ -109,7 +109,65 @@ async function uploadEvidence(req, folderId) {
   });
 }
 
+function renderKinerja(res, req, data) {
+  return res.render('kinerja/list', {
+    title: data.title,
+    viewMode: data.viewMode,
+    months: data.months || [],
+    dates: data.dates || [],
+    reports: data.reports || [],
+    selectedMonth: data.selectedMonth || null,
+    selectedDate: data.selectedDate || null,
+    notice: req.query.notice || null,
+    error: req.query.error || null,
+    createdPassword: req.query.created_pass || null,
+    createdShareUuid: req.query.created_share_uuid || null,
+    domain: `${req.protocol}://${req.get('host')}`,
+    csrfToken: res.locals.csrfToken,
+  });
+}
+
 router.get('/', async (req, res) => {
+  try {
+    const [months] = await db.query(
+      `SELECT DATE_FORMAT(activity_date, '%Y-%m') AS month_key,
+              YEAR(activity_date) AS year_number, MONTH(activity_date) AS month_number,
+              COUNT(*) AS report_count, COUNT(DISTINCT activity_date) AS date_count
+       FROM kinerja_reports WHERE account_id = ?
+       GROUP BY YEAR(activity_date), MONTH(activity_date)
+       ORDER BY YEAR(activity_date) DESC, MONTH(activity_date) DESC`,
+      [req.activeAccount.id]
+    );
+    months.forEach((month) => { month.folder_name = `Kinerja-${MONTHS[Number(month.month_number) - 1]}`; });
+    return renderKinerja(res, req, { title: 'TKinerja · Bulan', viewMode: 'months', months });
+  } catch (err) {
+    return res.status(500).send('Gagal memuat TKinerja: ' + err.message);
+  }
+});
+
+router.get('/month/:year/:month', async (req, res) => {
+  const year = String(req.params.year);
+  const month = String(req.params.month).padStart(2, '0');
+  if (!/^\d{4}$/.test(year) || !/^(0[1-9]|1[0-2])$/.test(month)) return res.status(400).send('Bulan tidak valid.');
+  try {
+    const [dates] = await db.query(
+      `SELECT DATE_FORMAT(activity_date, '%Y-%m-%d') AS date_key, COUNT(*) AS report_count,
+              SUM(evidence_file_id IS NOT NULL) AS evidence_count
+       FROM kinerja_reports
+       WHERE account_id = ? AND YEAR(activity_date) = ? AND MONTH(activity_date) = ?
+       GROUP BY activity_date ORDER BY activity_date DESC`,
+      [req.activeAccount.id, Number(year), Number(month)]
+    );
+    const selectedMonth = { year, month, folder_name: `Kinerja-${MONTHS[Number(month) - 1]}` };
+    return renderKinerja(res, req, { title: `${selectedMonth.folder_name} ${year}`, viewMode: 'dates', dates, selectedMonth });
+  } catch (err) {
+    return res.status(500).send('Gagal memuat tanggal TKinerja: ' + err.message);
+  }
+});
+
+router.get('/date/:date', async (req, res) => {
+  const date = String(req.params.date);
+  if (!/^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(date)) return res.status(400).send('Tanggal tidak valid.');
   try {
     const [reports] = await db.query(
       `SELECT k.*, DATE_FORMAT(k.activity_date, '%Y-%m-%d') AS activity_date,
@@ -118,18 +176,20 @@ router.get('/', async (req, res) => {
        FROM kinerja_reports k
        LEFT JOIN files f ON f.id = k.evidence_file_id
        LEFT JOIN shares s ON s.item_type = 'kinerja' AND s.item_id = k.id
-       LEFT JOIN shortlinks sl ON sl.original_url LIKE CONCAT('%/share/', s.uuid)
-       WHERE k.account_id = ?
-       ORDER BY k.activity_date DESC, k.start_time DESC`,
-      [req.activeAccount.id]
+       LEFT JOIN shortlinks sl ON sl.account_id = k.account_id AND sl.original_url LIKE CONCAT('%/share/', s.uuid, '%')
+       WHERE k.account_id = ? AND k.activity_date = ?
+       ORDER BY k.start_time DESC`,
+      [req.activeAccount.id, date]
     );
-    res.render('kinerja/list', {
-      title: 'TKinerja · Laporan Kinerja', reports,
-      notice: req.query.notice || null, error: req.query.error || null,
-      domain: `${req.protocol}://${req.get('host')}`, csrfToken: res.locals.csrfToken,
+    const [year, month, day] = date.split('-');
+    return renderKinerja(res, req, {
+      title: `TKinerja · ${day}-${month}-${year}`,
+      viewMode: 'reports', reports,
+      selectedDate: { key: date, label: `${day}-${month}-${year}` },
+      selectedMonth: { year, month, folder_name: `Kinerja-${MONTHS[Number(month) - 1]}` },
     });
   } catch (err) {
-    res.status(500).send('Gagal memuat TKinerja: ' + err.message);
+    return res.status(500).send('Gagal memuat laporan TKinerja: ' + err.message);
   }
 });
 
@@ -229,7 +289,7 @@ router.post('/:uuid/delete', async (req, res) => {
     const report = await getOwnedReport(req.params.uuid, req.activeAccount.id);
     if (!report) throw new Error('Laporan tidak ditemukan.');
     const [shares] = await db.query("SELECT uuid FROM shares WHERE item_type = 'kinerja' AND item_id = ?", [report.id]);
-    for (const share of shares) await db.query('DELETE FROM shortlinks WHERE original_url LIKE ?', [`%/share/${share.uuid}`]);
+    for (const share of shares) await db.query('DELETE FROM shortlinks WHERE original_url LIKE ?', [`%/share/${share.uuid}%`]);
     await db.query("DELETE FROM shares WHERE item_type = 'kinerja' AND item_id = ?", [report.id]);
     await db.query('DELETE FROM kinerja_reports WHERE id = ?', [report.id]);
     if (report.evidence_file_id) {

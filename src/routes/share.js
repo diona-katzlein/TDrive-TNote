@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 
@@ -19,6 +20,41 @@ function isShareActive(share) {
   if (share.expires_at && Date.now() > Number(share.expires_at)) return false;
   if (share.max_views && Number(share.views_count) >= Number(share.max_views)) return false;
   return true;
+}
+
+const KINERJA_PASSWORD_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+function generateKinerjaPassword() {
+  let password = '';
+  for (let i = 0; i < 8; i++) {
+    password += KINERJA_PASSWORD_CHARS[crypto.randomInt(KINERJA_PASSWORD_CHARS.length)];
+  }
+  return password;
+}
+
+function validateKinerjaPassword(value) {
+  const password = String(value || '').trim();
+  if (!/^[A-Za-z0-9]{8}$/.test(password)) {
+    throw new Error('Password TKinerja wajib tepat 8 karakter huruf dan angka tanpa spasi.');
+  }
+  return password;
+}
+
+function verifyPasswordQuery(req, share) {
+  if (!share.password_hash) return false;
+  if (typeof req.query.pwd === 'string' && cryptoService.verifyPassword(req.query.pwd, share.password_hash)) {
+    return true;
+  }
+  if (typeof req.query.pass === 'string') {
+    try {
+      const base32 = require('base32');
+      const legacyPassword = base32.decode(req.query.pass).toString('utf8').trim();
+      return Boolean(legacyPassword && cryptoService.verifyPassword(legacyPassword, share.password_hash));
+    } catch (_) {
+      return false;
+    }
+  }
+  return false;
 }
 
 // ----------------------------------------------------
@@ -64,10 +100,13 @@ router.post('/create', async (req, res) => {
       throw new Error('Tipe item tidak valid.');
     }
 
-    const shareUuid = require('crypto').randomUUID();
+    const shareUuid = crypto.randomUUID();
     const expiresAt = expires_in_hours ? Date.now() + (Number(expires_in_hours) * 60 * 60 * 1000) : null;
     const maxViews = max_views ? Number(max_views) : null;
-    const passwordHash = password ? cryptoService.hashPassword(password) : null;
+    const effectivePassword = item_type === 'kinerja'
+      ? (String(password || '').trim() ? validateKinerjaPassword(password) : generateKinerjaPassword())
+      : String(password || '');
+    const passwordHash = effectivePassword ? cryptoService.hashPassword(effectivePassword) : null;
 
     // Simpan ke DB
     await db.query(
@@ -89,7 +128,8 @@ router.post('/create', async (req, res) => {
 
     // AUTO GENERATE TSHORT LINK UNTUK SHARING INI
     const hostDomain = req.protocol + '://' + req.get('host');
-    const fullOriginalUrl = hostDomain + '/share/' + shareUuid;
+    const fullOriginalUrl = hostDomain + '/share/' + shareUuid
+      + (item_type === 'kinerja' ? '?pwd=' + encodeURIComponent(effectivePassword) : '');
     
     // Generate kode unik TShort (hindari collision dengan link yang sudah ada)
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -120,8 +160,8 @@ router.post('/create', async (req, res) => {
     
     let redirectUrl = redirectBack + (redirectBack.includes('?') ? '&' : '?') + 'notice=' + encodeURIComponent('Tautan berbagi publik TShort berhasil dibuat!');
     redirectUrl += '&created_share_uuid=' + shareUuid;
-    if (password) {
-      redirectUrl += '&created_pass=' + encodeURIComponent(password);
+    if (effectivePassword) {
+      redirectUrl += '&created_pass=' + encodeURIComponent(effectivePassword);
     }
     redirectUrl += '&created_name=' + encodeURIComponent(titleForAudit);
     
@@ -151,6 +191,60 @@ router.get('/:uuid/shortcode-data', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Ganti password share TKinerja dan perbarui tujuan TShort secara atomik.
+router.post('/:uuid/password', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).send('Unauthorized');
+  }
+
+  const { uuid } = req.params;
+  const redirectBack = req.body.redirect || '/kinerja';
+
+  try {
+    const password = validateKinerjaPassword(req.body.password);
+    const [shares] = await db.query(
+      `SELECT s.id, s.item_id
+       FROM shares s
+       INNER JOIN kinerja_reports k ON k.id = s.item_id
+       WHERE s.uuid = ? AND s.item_type = 'kinerja' AND k.account_id = ?`,
+      [uuid, req.activeAccount.id]
+    );
+    if (!shares[0]) throw new Error('Tautan berbagi TKinerja tidak ditemukan.');
+
+    const hostDomain = req.protocol + '://' + req.get('host');
+    const targetUrl = `${hostDomain}/share/${uuid}?pwd=${encodeURIComponent(password)}`;
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      await connection.query('UPDATE shares SET password_hash = ? WHERE id = ?', [cryptoService.hashPassword(password), shares[0].id]);
+      const [shortResult] = await connection.query(
+        'UPDATE shortlinks SET original_url = ? WHERE account_id = ? AND original_url LIKE ?',
+        [targetUrl, req.activeAccount.id, `%/share/${uuid}%`]
+      );
+      if (!shortResult.affectedRows) throw new Error('TShort untuk laporan ini tidak ditemukan.');
+      await connection.commit();
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+
+    if (req.session.unlockedShares) delete req.session.unlockedShares[uuid];
+    await auditService.log(req, 'CHANGE_KINERJA_SHARE_PASSWORD', `Mengganti password share TKinerja UUID: ${uuid}`).catch((auditErr) => {
+      console.error('[TKinerja] Password berubah, tetapi audit log gagal:', auditErr.message);
+    });
+
+    let redirectUrl = redirectBack + (redirectBack.includes('?') ? '&' : '?')
+      + 'notice=' + encodeURIComponent('Password share dan tautan TShort berhasil diperbarui.');
+    redirectUrl += '&created_share_uuid=' + encodeURIComponent(uuid);
+    redirectUrl += '&created_pass=' + encodeURIComponent(password);
+    return res.redirect(redirectUrl);
+  } catch (err) {
+    return res.redirect(redirectBack + (redirectBack.includes('?') ? '&' : '?') + 'error=' + encodeURIComponent(err.message));
   }
 });
 
@@ -205,7 +299,6 @@ router.post('/:uuid/revoke', async (req, res) => {
 // Form Verifikasi Sandi Share
 router.get('/:uuid/unlock', async (req, res) => {
   const { uuid } = req.params;
-  const { pass } = req.query;
   try {
     const [shares] = await db.query('SELECT * FROM shares WHERE uuid = ?', [uuid]);
     const share = shares[0];
@@ -213,17 +306,11 @@ router.get('/:uuid/unlock', async (req, res) => {
       return res.status(404).send('Tautan berbagi tidak ditemukan atau sudah kedaluwarsa.');
     }
 
-    // Coba bypass otomatis via parameter '?pass='
-    if (pass && share.password_hash) {
-      try {
-        const base32 = require('base32');
-        const plainPassword = base32.decode(pass).toString('utf8').trim();
-        if (plainPassword && cryptoService.verifyPassword(plainPassword, share.password_hash)) {
-          req.session.unlockedShares = req.session.unlockedShares || {};
-          req.session.unlockedShares[uuid] = true;
-          return res.redirect(`/share/${uuid}`);
-        }
-      } catch (_) {}
+    // Mendukung '?pwd=' baru dan '?pass=' Base32 lama untuk kompatibilitas.
+    if (verifyPasswordQuery(req, share)) {
+      req.session.unlockedShares = req.session.unlockedShares || {};
+      req.session.unlockedShares[uuid] = true;
+      return res.redirect(`/share/${uuid}`);
     }
 
     res.render('shares/password', { title: 'Verifikasi Sandi Berbagi', uuid, error: null, csrfToken: res.locals.csrfToken });
@@ -267,23 +354,20 @@ router.get('/:uuid', async (req, res) => {
       return res.status(404).render('shares/password', { title: 'Error', uuid: null, error: 'Tautan berbagi tidak ditemukan, sudah kedaluwarsa, atau batas tayang terlampaui.', csrfToken: null });
     }
 
-    // Proteksi sandi
+    // Proteksi sandi; query password hanya dipakai untuk membuka session lalu dibuang dari URL.
     if (share.password_hash) {
-      // Coba verifikasi otomatis via query parameter '?pass=' (Base32 encoded)
-      if (req.query.pass) {
-        try {
-          const base32 = require('base32');
-          const plainPassword = base32.decode(req.query.pass).toString('utf8').trim();
-          if (plainPassword && cryptoService.verifyPassword(plainPassword, share.password_hash)) {
-            req.session.unlockedShares = req.session.unlockedShares || {};
-            req.session.unlockedShares[uuid] = true;
-          }
-        } catch (_) {}
+      if (verifyPasswordQuery(req, share)) {
+        req.session.unlockedShares = req.session.unlockedShares || {};
+        req.session.unlockedShares[uuid] = true;
+        return res.redirect(`/share/${uuid}`);
       }
 
       const unlocked = req.session.unlockedShares && req.session.unlockedShares[uuid];
       if (!unlocked) {
-        return res.redirect(`/share/${uuid}/unlock` + (req.query.pass ? `?pass=${req.query.pass}` : ''));
+        const query = typeof req.query.pwd === 'string'
+          ? `?pwd=${encodeURIComponent(req.query.pwd)}`
+          : (typeof req.query.pass === 'string' ? `?pass=${encodeURIComponent(req.query.pass)}` : '');
+        return res.redirect(`/share/${uuid}/unlock${query}`);
       }
     }
 
