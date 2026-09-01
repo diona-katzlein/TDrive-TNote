@@ -5,6 +5,9 @@
   .kinerja-card { overflow-x:auto; }
   .kinerja-thumb { width:74px; height:58px; object-fit:cover; border-radius:8px; border:1px solid var(--border); }
   .kinerja-actions { display:flex; gap:7px; flex-wrap:wrap; align-items:center; }
+  .view-toolbar { display:flex; justify-content:flex-end; gap:6px; margin:-4px 0 16px; }
+  .view-toggle { padding:7px 11px; background:var(--panel); color:var(--muted); border:1px solid var(--border); border-radius:7px; cursor:pointer; font-weight:650; }
+  .view-toggle.active { color:#fff; background:var(--accent); border-color:var(--accent); }
   .folder-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px; }
   .folder-card { display:block; color:var(--text); padding:18px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); }
   .folder-card:hover { border-color:var(--accent); text-decoration:none; }
@@ -15,7 +18,26 @@
   .modal-card { width:100%; max-width:480px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:22px; }
   .password-row { display:flex; gap:8px; }
   .password-row input { flex:1; }
-  @media (max-width:700px) { .kinerja-head { align-items:flex-start; flex-direction:column; } }
+  .display-list.folder-grid { display:flex; flex-direction:column; gap:8px; }
+  .display-list .folder-card { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:13px 16px; }
+  .display-list .folder-title { margin:0; }
+  .display-compact.folder-grid { display:flex; flex-direction:column; gap:4px; }
+  .display-compact .folder-card { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:8px 12px; border-radius:6px; }
+  .display-compact .folder-title { margin:0; font-size:14px; }
+  .reports-display.display-grid { padding:0; border:0; background:transparent; overflow:visible; }
+  .reports-display.display-grid .grid, .reports-display.display-grid tbody { display:block; border:0; background:transparent; }
+  .reports-display.display-grid thead { display:none; }
+  .reports-display.display-grid tbody { display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:14px; }
+  .reports-display.display-grid tr { display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .reports-display.display-grid td { display:block; border-bottom:1px solid var(--border); }
+  .reports-display.display-grid td:last-child { border-bottom:0; }
+  .reports-display.display-grid .kinerja-thumb { width:100%; height:150px; }
+  .reports-display.display-compact { padding:10px; }
+  .reports-display.display-compact th, .reports-display.display-compact td { padding:7px 9px; font-size:12px; }
+  .reports-display.display-compact .kinerja-thumb { width:46px; height:34px; }
+  .reports-display.display-compact .share-box { padding:6px; }
+  .reports-display.display-compact .btn.small { padding:4px 7px; font-size:11px; }
+  @media (max-width:700px) { .kinerja-head { align-items:flex-start; flex-direction:column; } .view-toolbar { justify-content:flex-start; } .display-list .folder-card,.display-compact .folder-card { align-items:flex-start; flex-direction:column; gap:3px; } }
 </style>
 
 <div class="kinerja-head">
@@ -43,8 +65,14 @@
   <% if (selectedDate) { %><span> / </span><span><%= selectedDate.label %></span><% } %>
 </nav>
 
+<div class="view-toolbar" role="group" aria-label="Pilihan tampilan">
+  <button class="view-toggle" type="button" data-display="grid" onclick="setDisplay('grid')" title="Tampilan kartu">▦ Grid</button>
+  <button class="view-toggle" type="button" data-display="list" onclick="setDisplay('list')" title="Tampilan daftar">☰ List</button>
+  <button class="view-toggle" type="button" data-display="compact" onclick="setDisplay('compact')" title="Tampilan ringkas">≡ Compact</button>
+</div>
+
 <% if (viewMode === 'months') { %>
-  <div class="folder-grid">
+  <div class="folder-grid display-target">
     <% months.forEach(function(m) { %>
       <a class="folder-card" href="/kinerja/month/<%= m.year_number %>/<%= String(m.month_number).padStart(2, '0') %>">
         <span class="folder-title">📁 <%= m.folder_name %>-<%= m.year_number %></span>
@@ -56,7 +84,7 @@
 <% } %>
 
 <% if (viewMode === 'dates') { %>
-  <div class="folder-grid">
+  <div class="folder-grid display-target">
     <% dates.forEach(function(d) { var parts = d.date_key.split('-'); %>
       <a class="folder-card" href="/kinerja/date/<%= d.date_key %>">
         <span class="folder-title">📁 <%= parts[2] %>-<%= parts[1] %>-<%= parts[0] %></span>
@@ -68,7 +96,7 @@
 <% } %>
 
 <% if (viewMode === 'reports') { %>
-  <div class="card kinerja-card">
+  <div class="card kinerja-card reports-display display-target">
     <table class="grid">
       <thead><tr><th>Kegiatan</th><th>Waktu</th><th>Bukti</th><th>Aksi</th></tr></thead>
       <tbody>
@@ -137,6 +165,13 @@ function openShare(uuid,name){document.getElementById('shareUuid').value=uuid;do
 function openPassword(uuid,name){document.getElementById('passwordName').textContent=name;document.getElementById('passwordForm').action='/share/'+encodeURIComponent(uuid)+'/password';setRandomPassword('newPassword');document.getElementById('passwordModal').style.display='flex';}
 function closeModal(id){document.getElementById(id).style.display='none';}
 function copyText(value){navigator.clipboard.writeText(value);}
+function setDisplay(mode){
+  if(!['grid','list','compact'].includes(mode))mode='grid';
+  document.querySelectorAll('.display-target').forEach(function(el){el.classList.remove('display-grid','display-list','display-compact');el.classList.add('display-'+mode);});
+  document.querySelectorAll('.view-toggle').forEach(function(button){var active=button.dataset.display===mode;button.classList.toggle('active',active);button.setAttribute('aria-pressed',active?'true':'false');});
+  try{localStorage.setItem('tkinerjaDisplay',mode);}catch(_){}
+}
+(function(){var saved='grid';try{saved=localStorage.getItem('tkinerjaDisplay')||'grid';}catch(_){}setDisplay(saved);})();
 </script>
 
 <%- include('../partials/footer') %>
