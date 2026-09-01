@@ -38,6 +38,18 @@ const upload = multer({
 
 router.use(requireActiveAccount);
 
+function parseEvidenceUpload(req, res, next) {
+  upload.single('evidence')(req, res, (err) => {
+    if (!err) return next();
+    if (req.file && req.file.path) fs.promises.unlink(req.file.path).catch(() => {});
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? `Ukuran bukti gambar melebihi batas ${MAX_IMAGE_MB} MB.`
+      : (err.message || 'Gagal memproses bukti gambar.');
+    const target = req.params && req.params.uuid ? `/kinerja/${req.params.uuid}/edit` : '/kinerja/new';
+    return redirectWith(res, target, 'error', message);
+  });
+}
+
 function redirectWith(res, target, type, message) {
   const separator = target.includes('?') ? '&' : '?';
   return res.redirect(`${target}${separator}${type}=${encodeURIComponent(message)}`);
@@ -122,11 +134,11 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/new', (req, res) => res.render('kinerja/form', {
-  title: 'Buat Laporan TKinerja', report: null, error: null,
+  title: 'Buat Laporan TKinerja', report: null, error: req.query.error || null,
   maxImageMb: MAX_IMAGE_MB, csrfToken: res.locals.csrfToken,
 }));
 
-router.post('/', upload.single('evidence'), async (req, res) => {
+router.post('/', parseEvidenceUpload, async (req, res) => {
   try {
     const input = validateInput(req.body);
     const folder = await ensureDateFolder(req.activeAccount.id, input.activityDate);
@@ -140,10 +152,13 @@ router.post('/', upload.single('evidence'), async (req, res) => {
       [uuid, req.activeAccount.id, folder.id, evidence ? evidence.id : null, input.activityDate,
         input.title, input.startTime, input.endTime, input.description || null, now, now]
     );
-    await auditService.log(req, 'CREATE_KINERJA', `Membuat laporan TKinerja "${input.title}" (${uuid})`);
-    redirectWith(res, '/kinerja', 'notice', 'Laporan kinerja berhasil dibuat dan dirapikan ke folder tanggal.');
+    await auditService.log(req, 'CREATE_KINERJA', `Membuat laporan TKinerja "${input.title}" (${uuid})`).catch((auditErr) => {
+      console.error('[TKinerja] Laporan tersimpan, tetapi audit log gagal:', auditErr.message);
+    });
+    return redirectWith(res, '/kinerja', 'notice', 'Laporan kinerja berhasil dibuat dan dirapikan ke folder tanggal.');
   } catch (err) {
-    redirectWith(res, '/kinerja/new', 'error', err.message);
+    console.error('[TKinerja] Gagal membuat laporan:', err);
+    return redirectWith(res, '/kinerja/new', 'error', err.message || 'Laporan gagal disimpan.');
   } finally {
     if (req.file && req.file.path) fs.promises.unlink(req.file.path).catch(() => {});
   }
@@ -158,7 +173,7 @@ router.get('/:uuid/edit', async (req, res) => {
   });
 });
 
-router.post('/:uuid', upload.single('evidence'), async (req, res) => {
+router.post('/:uuid', parseEvidenceUpload, async (req, res) => {
   let report;
   try {
     report = await getOwnedReport(req.params.uuid, req.activeAccount.id);
@@ -183,10 +198,13 @@ router.post('/:uuid', upload.single('evidence'), async (req, res) => {
         await fileService.deleteFile(oldFile.id);
       }
     }
-    await auditService.log(req, 'UPDATE_KINERJA', `Memperbarui laporan TKinerja "${input.title}" (${report.uuid})`);
-    redirectWith(res, '/kinerja', 'notice', 'Laporan kinerja berhasil diperbarui.');
+    await auditService.log(req, 'UPDATE_KINERJA', `Memperbarui laporan TKinerja "${input.title}" (${report.uuid})`).catch((auditErr) => {
+      console.error('[TKinerja] Laporan diperbarui, tetapi audit log gagal:', auditErr.message);
+    });
+    return redirectWith(res, '/kinerja', 'notice', 'Laporan kinerja berhasil diperbarui.');
   } catch (err) {
-    redirectWith(res, `/kinerja/${req.params.uuid}/edit`, 'error', err.message);
+    console.error('[TKinerja] Gagal memperbarui laporan:', err);
+    return redirectWith(res, `/kinerja/${req.params.uuid}/edit`, 'error', err.message || 'Laporan gagal diperbarui.');
   } finally {
     if (req.file && req.file.path) fs.promises.unlink(req.file.path).catch(() => {});
   }
