@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
+    "migrate": "node src/db/migrate.js",
+    "migrate:check": "node src/db/migrate.js --dry-run",
     "genkey": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
   },
   "engines": {
