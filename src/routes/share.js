@@ -54,6 +54,12 @@ router.post('/create', async (req, res) => {
       if (!note || note.account_id !== req.activeAccount.id) throw new Error('Catatan tidak ditemukan.');
       itemId = note.id;
       titleForAudit = note.title;
+    } else if (item_type === 'kinerja') {
+      const [reports] = await db.query('SELECT * FROM kinerja_reports WHERE uuid = ? AND account_id = ?', [item_uuid, req.activeAccount.id]);
+      const report = reports[0];
+      if (!report) throw new Error('Laporan kinerja tidak ditemukan.');
+      itemId = report.id;
+      titleForAudit = report.title;
     } else {
       throw new Error('Tipe item tidak valid.');
     }
@@ -85,20 +91,30 @@ router.post('/create', async (req, res) => {
     const hostDomain = req.protocol + '://' + req.get('host');
     const fullOriginalUrl = hostDomain + '/share/' + shareUuid;
     
-    // Generate 6 digit short code acak
+    // Generate kode unik TShort (hindari collision dengan link yang sudah ada)
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let shortCode = '';
-    for (let i = 0; i < 6; i++) {
-      shortCode += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let attempt = 0; attempt < 10; attempt++) {
+      shortCode = '';
+      for (let i = 0; i < 6; i++) shortCode += chars.charAt(Math.floor(Math.random() * chars.length));
+      const [existingCodes] = await db.query('SELECT id FROM shortlinks WHERE short_code = ?', [shortCode]);
+      if (existingCodes.length === 0) break;
+      shortCode = '';
+    }
+    if (!shortCode) {
+      await db.query('DELETE FROM shares WHERE uuid = ?', [shareUuid]);
+      throw new Error('Gagal membuat kode TShort unik. Silakan coba lagi.');
     }
 
     try {
-      // Simpan shortlink baru
       await db.query(
         'INSERT INTO shortlinks (account_id, short_code, original_url, clicks, created_at) VALUES (?, ?, ?, 0, ?)',
         [req.activeAccount.id, shortCode, fullOriginalUrl, Date.now()]
       );
-    } catch (_) {}
+    } catch (shortErr) {
+      await db.query('DELETE FROM shares WHERE uuid = ?', [shareUuid]);
+      throw shortErr;
+    }
 
     await auditService.log(req, 'CREATE_SHARE', `Membuat share untuk ${item_type}: ${titleForAudit} (Share UUID: ${shareUuid}, Short Code: /s/${shortCode})`);
     
@@ -152,6 +168,21 @@ router.post('/:uuid/revoke', async (req, res) => {
     const [shares] = await db.query('SELECT * FROM shares WHERE uuid = ?', [uuid]);
     const share = shares[0];
     if (share) {
+      let owned = false;
+      if (share.item_type === 'kinerja') {
+        const [items] = await db.query('SELECT id FROM kinerja_reports WHERE id = ? AND account_id = ?', [share.item_id, req.activeAccount.id]);
+        owned = items.length > 0;
+      } else if (share.item_type === 'file') {
+        const item = await fileService.getFile(share.item_id);
+        owned = Boolean(item && item.account_id === req.activeAccount.id);
+      } else if (share.item_type === 'folder') {
+        const item = await fileService.getFolder(share.item_id);
+        owned = Boolean(item && item.account_id === req.activeAccount.id);
+      } else if (share.item_type === 'note') {
+        const [items] = await db.query('SELECT id FROM notes WHERE id = ? AND account_id = ?', [share.item_id, req.activeAccount.id]);
+        owned = items.length > 0;
+      }
+      if (!owned) throw new Error('Tautan berbagi tidak ditemukan.');
       // Hapus share
       await db.query('DELETE FROM shares WHERE uuid = ?', [uuid]);
       
@@ -286,6 +317,18 @@ router.get('/:uuid', async (req, res) => {
       });
     }
 
+    if (share.item_type === 'kinerja') {
+      const [reports] = await db.query(
+        `SELECT k.*, DATE_FORMAT(k.activity_date, '%Y-%m-%d') AS activity_date,
+                f.name AS evidence_name, f.mime AS evidence_mime
+         FROM kinerja_reports k LEFT JOIN files f ON f.id = k.evidence_file_id WHERE k.id = ?`,
+        [share.item_id]
+      );
+      const report = reports[0];
+      if (!report) return res.status(404).send('Laporan asal sudah dihapus.');
+      return res.render('shares/kinerja', { title: report.title, report, uuid });
+    }
+
     if (share.item_type === 'file') {
       const file = await fileService.getFile(share.item_id);
       if (!file) return res.status(404).send('File asal sudah dihapus.');
@@ -318,6 +361,30 @@ router.get('/:uuid', async (req, res) => {
     res.status(400).send('Tipe tidak dikenal.');
   } catch (err) {
     res.status(500).send('Terjadi kesalahan: ' + err.message);
+  }
+});
+
+// Tampilkan bukti gambar TKinerja publik
+router.get('/:uuid/kinerja-evidence', async (req, res) => {
+  try {
+    const [shares] = await db.query('SELECT * FROM shares WHERE uuid = ?', [req.params.uuid]);
+    const share = shares[0];
+    if (!share || !isShareActive(share) || share.item_type !== 'kinerja') return res.status(404).send('Bukti tidak ditemukan.');
+    if (share.password_hash && !(req.session.unlockedShares && req.session.unlockedShares[share.uuid])) {
+      return res.status(403).send('Akses ditolak (butuh sandi).');
+    }
+    const [reports] = await db.query('SELECT evidence_file_id, account_id FROM kinerja_reports WHERE id = ?', [share.item_id]);
+    const report = reports[0];
+    if (!report || !report.evidence_file_id) return res.status(404).send('Bukti tidak tersedia.');
+    const file = await fileService.getFile(report.evidence_file_id);
+    const account = await fileService.getAccount(report.account_id);
+    if (!file || !account) return res.status(404).send('Bukti tidak tersedia.');
+    res.setHeader('Content-Type', file.mime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
+    await storageService.downloadToStream(account, file, res);
+    res.end();
+  } catch (err) {
+    if (!res.headersSent) res.status(500).send('Gagal memuat bukti: ' + err.message);
   }
 });
 

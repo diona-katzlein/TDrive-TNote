@@ -1,0 +1,36 @@
+<%- include('../partials/auth-header') %>
+
+<style>
+  .report-sheet { max-width:820px; margin:35px auto; background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; box-shadow:0 12px 35px rgba(0,0,0,.2); }
+  .report-head { padding:28px; background:linear-gradient(135deg,#168bd2,#24a1de); color:#fff; }
+  .report-head h1 { margin:0 0 6px; font-size:26px; }
+  .report-body { padding:28px; }
+  .meta-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:24px; }
+  .meta { background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:13px; }
+  .meta small { display:block; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+  .description { white-space:pre-wrap; background:var(--panel-2); border-left:4px solid var(--accent); border-radius:8px; padding:16px; }
+  .evidence { margin-top:25px; text-align:center; }
+  .evidence img { max-width:100%; max-height:650px; object-fit:contain; border-radius:10px; border:1px solid var(--border); background:#000; }
+  @media(max-width:600px){.meta-grid{grid-template-columns:1fr}.report-head,.report-body{padding:20px}}
+  @media print {.topbar,.footer,.print-button{display:none!important}body{background:#fff;color:#111}.report-sheet{box-shadow:none;border:none;margin:0;max-width:none}.report-body{color:#111}.meta,.description{background:#f5f5f5;border-color:#ddd}.meta small{color:#555}}
+</style>
+
+<div class="report-sheet">
+  <header class="report-head">
+    <div style="font-size:13px;letter-spacing:1px;text-transform:uppercase;opacity:.9;">Laporan Bukti Dukung Kinerja</div>
+    <h1><%= report.title %></h1>
+    <div>TKinerja · Telegram Kinerja</div>
+  </header>
+  <section class="report-body">
+    <div class="meta-grid">
+      <div class="meta"><small>Tanggal kegiatan</small><strong><%= String(report.activity_date).slice(0,10) %></strong></div>
+      <div class="meta"><small>Jam mulai</small><strong><%= String(report.start_time).slice(0,5) %></strong></div>
+      <div class="meta"><small>Jam selesai</small><strong><%= String(report.end_time).slice(0,5) %></strong></div>
+    </div>
+    <% if (report.description) { %><h3>Isi Kegiatan</h3><div class="description"><%= report.description %></div><% } %>
+    <% if (report.evidence_file_id) { %><div class="evidence"><h3>Bukti Dukung</h3><img src="/share/<%= uuid %>/kinerja-evidence" alt="Bukti dukung <%= report.title %>"></div><% } %>
+    <div class="print-button" style="margin-top:25px;text-align:center;"><button class="btn" onclick="window.print()">🖨️ Cetak / Simpan PDF</button></div>
+  </section>
+</div>
+
+<%- include('../partials/footer') %>

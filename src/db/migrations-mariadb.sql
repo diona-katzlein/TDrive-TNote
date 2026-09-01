@@ -148,4 +148,24 @@ CREATE TABLE IF NOT EXISTS shortlinks (
 
 CREATE INDEX IF NOT EXISTS idx_shortlinks_code ON shortlinks(short_code);
 
+-- TKinerja: laporan bukti dukung kinerja dengan gambar tersimpan di TDrive/Telegram
+CREATE TABLE IF NOT EXISTS kinerja_reports (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  uuid          VARCHAR(36) NOT NULL UNIQUE,
+  account_id    INT NOT NULL,
+  folder_id     INT NOT NULL,
+  evidence_file_id INT DEFAULT NULL,
+  activity_date DATE NOT NULL,
+  title         VARCHAR(255) NOT NULL,
+  start_time    TIME NOT NULL,
+  end_time      TIME NOT NULL,
+  description   LONGTEXT DEFAULT NULL,
+  created_at    BIGINT NOT NULL,
+  updated_at    BIGINT NOT NULL,
+  CONSTRAINT fk_kinerja_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  CONSTRAINT fk_kinerja_folder FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE CASCADE,
+  CONSTRAINT fk_kinerja_evidence FOREIGN KEY (evidence_file_id) REFERENCES files(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX IF NOT EXISTS idx_kinerja_account_date ON kinerja_reports(account_id, activity_date DESC);
 

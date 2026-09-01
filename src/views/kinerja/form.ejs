@@ -1,0 +1,50 @@
+<%- include('../partials/header') %>
+
+<div class="page-head">
+  <div><h1><%= report ? 'Edit' : 'Buat' %> Laporan TKinerja</h1><p class="hint">Bukti akan tersusun otomatis ke Kinerja-{Bulan}/dd-mm-yyyy.</p></div>
+  <a class="btn ghost" href="/kinerja">← Kembali</a>
+</div>
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+<div class="card" style="max-width:720px;">
+  <form class="form" method="POST" action="<%= report ? '/kinerja/' + report.uuid : '/kinerja' %>" enctype="multipart/form-data">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>Tanggal kegiatan
+      <input type="date" name="activity_date" value="<%= report ? String(report.activity_date).slice(0,10) : new Date().toISOString().slice(0,10) %>" required>
+    </label>
+    <label>Judul kegiatan
+      <input type="text" name="title" maxlength="255" value="<%= report ? report.title : '' %>" placeholder="Contoh: Rapat koordinasi bulanan" required>
+    </label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <label>Jam mulai<input type="time" name="start_time" value="<%= report ? String(report.start_time).slice(0,5) : '' %>" required></label>
+      <label>Jam selesai<input type="time" name="end_time" value="<%= report ? String(report.end_time).slice(0,5) : '' %>" required></label>
+    </div>
+    <label>Isi kegiatan (opsional)
+      <textarea name="description" placeholder="Tuliskan ringkasan, hasil, atau detail kegiatan..."><%= report && report.description ? report.description : '' %></textarea>
+    </label>
+    <label>Bukti gambar (opsional, maksimum <%= maxImageMb %> MB)
+      <input id="evidence" type="file" name="evidence" accept="image/*">
+    </label>
+    <img id="preview" alt="Preview bukti" style="display:none;max-width:100%;max-height:360px;object-fit:contain;border:1px solid var(--border);border-radius:10px;background:#000;">
+    <% if (report && report.evidence_file_id) { %>
+      <div>
+        <p class="hint">Bukti saat ini:</p>
+        <img src="/kinerja/<%= report.uuid %>/evidence" alt="Bukti saat ini" style="max-width:100%;max-height:360px;object-fit:contain;border-radius:10px;border:1px solid var(--border);">
+        <label style="margin-top:10px;display:flex;flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" name="remove_evidence" value="1"> Hapus bukti saat ini</label>
+      </div>
+    <% } %>
+    <div class="alert info" style="margin:0;">📁 Folder dibuat otomatis berdasarkan tanggal: <strong>Kinerja-<span id="monthName">Bulan</span></strong> / <strong id="dateFolder">dd-mm-yyyy</strong>.</div>
+    <div class="form-actions"><button class="btn"><%= report ? 'Simpan Perubahan' : 'Buat Laporan' %></button><a class="btn ghost" href="/kinerja">Batal</a></div>
+  </form>
+</div>
+<script>
+(function(){
+  var months=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  var date=document.querySelector('[name="activity_date"]');
+  function updateFolder(){var p=date.value.split('-');if(p.length===3){document.getElementById('monthName').textContent=months[Number(p[1])-1];document.getElementById('dateFolder').textContent=p[2]+'-'+p[1]+'-'+p[0];}}
+  date.addEventListener('change',updateFolder);updateFolder();
+  document.getElementById('evidence').addEventListener('change',function(){var img=document.getElementById('preview');if(this.files[0]){img.src=URL.createObjectURL(this.files[0]);img.style.display='block';}else{img.style.display='none';}});
+})();
+</script>
+
+<%- include('../partials/footer') %>

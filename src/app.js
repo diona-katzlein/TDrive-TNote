@@ -30,6 +30,7 @@ const workspaceRouter = require('./routes/workspace');
 const auditLogsRouter = require('./routes/auditLogs');
 const backupRouter = require('./routes/backup');
 const shortlinkRouter = require('./routes/shortlink');
+const kinerjaRouter = require('./routes/kinerja');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -148,6 +149,7 @@ app.use('/folders', foldersRouter);
 app.use('/drive', filesRouter);
 app.use('/notes', notesRouter);
 app.use('/shortlink', shortlinkRouter);
+app.use('/kinerja', kinerjaRouter);
 // app.use('/workspace', workspaceRouter);
 app.use('/audit-trail-logs', auditLogsRouter);
 app.use('/backup', backupRouter);
