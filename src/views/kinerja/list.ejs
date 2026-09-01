@@ -104,7 +104,7 @@
           <tr>
             <td><strong><%= r.title %></strong><% if (r.description) { %><div class="hint"><%= r.description.length > 110 ? r.description.slice(0, 110) + '…' : r.description %></div><% } %></td>
             <td><%= String(r.start_time).slice(0,5) %>–<%= String(r.end_time).slice(0,5) %></td>
-            <td><% if (r.evidence_uuid) { %><a href="/kinerja/<%= r.uuid %>/evidence" target="_blank"><img class="kinerja-thumb" src="/kinerja/<%= r.uuid %>/evidence" alt="Bukti <%= r.title %>"></a><% } else { %><span class="hint">Tanpa gambar</span><% } %></td>
+            <td><% if (r.evidence_uuid) { %><a href="/kinerja/<%= r.uuid %>/evidence" target="_blank"><img class="kinerja-thumb" src="/kinerja/<%= r.uuid %>/evidence" alt="Bukti <%= r.title %>"></a><div class="hint"><%= r.evidence_count %> gambar</div><% } else { %><span class="hint">Tanpa gambar</span><% } %></td>
             <td>
               <div class="kinerja-actions">
                 <a class="btn small ghost" href="/kinerja/<%= r.uuid %>/edit">Edit</a>

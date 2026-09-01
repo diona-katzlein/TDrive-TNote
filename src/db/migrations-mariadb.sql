@@ -169,3 +169,23 @@ CREATE TABLE IF NOT EXISTS kinerja_reports (
 
 CREATE INDEX IF NOT EXISTS idx_kinerja_account_date ON kinerja_reports(account_id, activity_date DESC);
 
+-- Banyak bukti gambar untuk satu laporan. Kolom legacy evidence_file_id tetap dipertahankan
+-- agar deployment/rollback lama aman, lalu datanya disalin idempotent ke tabel ini.
+CREATE TABLE IF NOT EXISTS kinerja_evidence (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  report_id   INT NOT NULL,
+  file_id     INT NOT NULL,
+  sort_order  INT NOT NULL DEFAULT 0,
+  created_at  BIGINT NOT NULL,
+  UNIQUE KEY uq_kinerja_evidence_file (report_id, file_id),
+  CONSTRAINT fk_kinerja_evidence_report FOREIGN KEY (report_id) REFERENCES kinerja_reports(id) ON DELETE CASCADE,
+  CONSTRAINT fk_kinerja_evidence_file FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX IF NOT EXISTS idx_kinerja_evidence_report ON kinerja_evidence(report_id, sort_order, id);
+
+INSERT IGNORE INTO kinerja_evidence (report_id, file_id, sort_order, created_at)
+SELECT id, evidence_file_id, 0, created_at
+FROM kinerja_reports
+WHERE evidence_file_id IS NOT NULL;
+

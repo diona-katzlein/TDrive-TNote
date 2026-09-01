@@ -16,6 +16,7 @@ const router = express.Router();
 const TMP_DIR = path.join(process.cwd(), 'data', 'tmp', 'kinerja');
 const MAX_IMAGE_MB = Number(process.env.TKINERJA_MAX_IMAGE_MB) || 20;
 const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+const MAX_EVIDENCE_FILES = Number(process.env.TKINERJA_MAX_EVIDENCE_FILES) || 20;
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -39,12 +40,14 @@ const upload = multer({
 router.use(requireActiveAccount);
 
 function parseEvidenceUpload(req, res, next) {
-  upload.single('evidence')(req, res, (err) => {
+  upload.array('evidence', MAX_EVIDENCE_FILES)(req, res, (err) => {
     if (!err) return next();
-    if (req.file && req.file.path) fs.promises.unlink(req.file.path).catch(() => {});
+    for (const file of req.files || []) fs.promises.unlink(file.path).catch(() => {});
     const message = err.code === 'LIMIT_FILE_SIZE'
-      ? `Ukuran bukti gambar melebihi batas ${MAX_IMAGE_MB} MB.`
-      : (err.message || 'Gagal memproses bukti gambar.');
+      ? `Salah satu bukti melebihi batas ${MAX_IMAGE_MB} MB.`
+      : (err.code === 'LIMIT_UNEXPECTED_FILE'
+        ? `Maksimum ${MAX_EVIDENCE_FILES} bukti gambar per laporan.`
+        : (err.message || 'Gagal memproses bukti gambar.'));
     const target = req.params && req.params.uuid ? `/kinerja/${req.params.uuid}/edit` : '/kinerja/new';
     return redirectWith(res, target, 'error', message);
   });
@@ -87,26 +90,53 @@ async function ensureDateFolder(accountId, activityDate) {
 
 async function getOwnedReport(uuid, accountId) {
   const [rows] = await db.query(
-    `SELECT k.*, DATE_FORMAT(k.activity_date, '%Y-%m-%d') AS activity_date,
-            f.uuid AS evidence_uuid, f.name AS evidence_name, f.mime AS evidence_mime
-     FROM kinerja_reports k
-     LEFT JOIN files f ON f.id = k.evidence_file_id
-     WHERE k.uuid = ? AND k.account_id = ?`,
+    `SELECT k.*, DATE_FORMAT(k.activity_date, '%Y-%m-%d') AS activity_date
+     FROM kinerja_reports k WHERE k.uuid = ? AND k.account_id = ?`,
     [uuid, accountId]
   );
-  return rows[0] || null;
+  const report = rows[0] || null;
+  if (!report) return null;
+  const [evidence] = await db.query(
+    `SELECT ke.id AS evidence_id, f.id AS file_id, f.uuid, f.name, f.mime
+     FROM kinerja_evidence ke INNER JOIN files f ON f.id = ke.file_id
+     WHERE ke.report_id = ? ORDER BY ke.sort_order, ke.id`,
+    [report.id]
+  );
+  report.evidence = evidence;
+  report.evidence_file_id = evidence[0] ? evidence[0].file_id : null;
+  return report;
 }
 
-async function uploadEvidence(req, folderId) {
-  if (!req.file) return null;
-  return storageService.uploadFile(req.activeAccount, {
-    tempPath: req.file.path,
-    filename: `Bukti-${Date.now()}-${req.file.originalname}`,
-    mime: req.file.mimetype,
-    size: req.file.size,
-    folderId,
-    storagePeer: req.body.storage_peer || null,
-  });
+async function uploadEvidenceFiles(req, folderId) {
+  const uploaded = [];
+  try {
+    for (let index = 0; index < (req.files || []).length; index++) {
+      const source = req.files[index];
+      const file = await storageService.uploadFile(req.activeAccount, {
+        tempPath: source.path,
+        filename: `Bukti-${Date.now()}-${index + 1}-${source.originalname}`,
+        mime: source.mimetype,
+        size: source.size,
+        folderId,
+        storagePeer: req.body.storage_peer || null,
+      });
+      uploaded.push(file);
+    }
+    return uploaded;
+  } catch (err) {
+    for (const file of uploaded) {
+      await storageService.deleteRemote(req.activeAccount, file).catch(() => {});
+      await fileService.deleteFile(file.id).catch(() => {});
+    }
+    throw err;
+  }
+}
+
+async function deleteEvidenceFile(account, fileId) {
+  const file = await fileService.getFile(fileId);
+  if (!file) return;
+  await storageService.deleteRemote(account, file).catch(() => {});
+  await fileService.deleteFile(file.id);
 }
 
 function renderKinerja(res, req, data) {
@@ -151,11 +181,12 @@ router.get('/month/:year/:month', async (req, res) => {
   if (!/^\d{4}$/.test(year) || !/^(0[1-9]|1[0-2])$/.test(month)) return res.status(400).send('Bulan tidak valid.');
   try {
     const [dates] = await db.query(
-      `SELECT DATE_FORMAT(activity_date, '%Y-%m-%d') AS date_key, COUNT(*) AS report_count,
-              SUM(evidence_file_id IS NOT NULL) AS evidence_count
-       FROM kinerja_reports
-       WHERE account_id = ? AND YEAR(activity_date) = ? AND MONTH(activity_date) = ?
-       GROUP BY activity_date ORDER BY activity_date DESC`,
+      `SELECT DATE_FORMAT(k.activity_date, '%Y-%m-%d') AS date_key, COUNT(DISTINCT k.id) AS report_count,
+              COUNT(ke.id) AS evidence_count
+       FROM kinerja_reports k
+       LEFT JOIN kinerja_evidence ke ON ke.report_id = k.id
+       WHERE k.account_id = ? AND YEAR(k.activity_date) = ? AND MONTH(k.activity_date) = ?
+       GROUP BY k.activity_date ORDER BY k.activity_date DESC`,
       [req.activeAccount.id, Number(year), Number(month)]
     );
     const selectedMonth = { year, month, folder_name: `Kinerja-${MONTHS[Number(month) - 1]}` };
@@ -171,10 +202,11 @@ router.get('/date/:date', async (req, res) => {
   try {
     const [reports] = await db.query(
       `SELECT k.*, DATE_FORMAT(k.activity_date, '%Y-%m-%d') AS activity_date,
-              f.uuid AS evidence_uuid, f.name AS evidence_name,
+              (SELECT f.uuid FROM kinerja_evidence ke INNER JOIN files f ON f.id = ke.file_id
+               WHERE ke.report_id = k.id ORDER BY ke.sort_order, ke.id LIMIT 1) AS evidence_uuid,
+              (SELECT COUNT(*) FROM kinerja_evidence ke WHERE ke.report_id = k.id) AS evidence_count,
               s.uuid AS share_uuid, sl.short_code
        FROM kinerja_reports k
-       LEFT JOIN files f ON f.id = k.evidence_file_id
        LEFT JOIN shares s ON s.item_type = 'kinerja' AND s.item_id = k.id
        LEFT JOIN shortlinks sl ON sl.account_id = k.account_id AND sl.original_url LIKE CONCAT('%/share/', s.uuid, '%')
        WHERE k.account_id = ? AND k.activity_date = ?
@@ -195,23 +227,33 @@ router.get('/date/:date', async (req, res) => {
 
 router.get('/new', (req, res) => res.render('kinerja/form', {
   title: 'Buat Laporan TKinerja', report: null, error: req.query.error || null,
-  maxImageMb: MAX_IMAGE_MB, csrfToken: res.locals.csrfToken,
+  maxImageMb: MAX_IMAGE_MB, maxEvidenceFiles: MAX_EVIDENCE_FILES, csrfToken: res.locals.csrfToken,
 }));
 
 router.post('/', parseEvidenceUpload, async (req, res) => {
   try {
     const input = validateInput(req.body);
     const folder = await ensureDateFolder(req.activeAccount.id, input.activityDate);
-    const evidence = await uploadEvidence(req, folder.id);
+    const evidence = await uploadEvidenceFiles(req, folder.id);
     const uuid = crypto.randomUUID();
     const now = Date.now();
-    await db.query(
-      `INSERT INTO kinerja_reports
-       (uuid, account_id, folder_id, evidence_file_id, activity_date, title, start_time, end_time, description, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [uuid, req.activeAccount.id, folder.id, evidence ? evidence.id : null, input.activityDate,
-        input.title, input.startTime, input.endTime, input.description || null, now, now]
-    );
+    try {
+      const [result] = await db.query(
+        `INSERT INTO kinerja_reports
+         (uuid, account_id, folder_id, evidence_file_id, activity_date, title, start_time, end_time, description, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [uuid, req.activeAccount.id, folder.id, evidence[0] ? evidence[0].id : null, input.activityDate,
+          input.title, input.startTime, input.endTime, input.description || null, now, now]
+      );
+      for (let index = 0; index < evidence.length; index++) {
+        await db.query('INSERT INTO kinerja_evidence (report_id, file_id, sort_order, created_at) VALUES (?, ?, ?, ?)',
+          [result.insertId, evidence[index].id, index, now]);
+      }
+    } catch (err) {
+      await db.query('DELETE FROM kinerja_reports WHERE uuid = ?', [uuid]).catch(() => {});
+      for (const file of evidence) await deleteEvidenceFile(req.activeAccount, file.id);
+      throw err;
+    }
     await auditService.log(req, 'CREATE_KINERJA', `Membuat laporan TKinerja "${input.title}" (${uuid})`).catch((auditErr) => {
       console.error('[TKinerja] Laporan tersimpan, tetapi audit log gagal:', auditErr.message);
     });
@@ -220,7 +262,7 @@ router.post('/', parseEvidenceUpload, async (req, res) => {
     console.error('[TKinerja] Gagal membuat laporan:', err);
     return redirectWith(res, '/kinerja/new', 'error', err.message || 'Laporan gagal disimpan.');
   } finally {
-    if (req.file && req.file.path) fs.promises.unlink(req.file.path).catch(() => {});
+    for (const file of req.files || []) fs.promises.unlink(file.path).catch(() => {});
   }
 });
 
@@ -228,8 +270,8 @@ router.get('/:uuid/edit', async (req, res) => {
   const report = await getOwnedReport(req.params.uuid, req.activeAccount.id);
   if (!report) return res.status(404).send('Laporan tidak ditemukan.');
   res.render('kinerja/form', {
-    title: 'Edit Laporan TKinerja', report, error: req.query.error || null,
-    maxImageMb: MAX_IMAGE_MB, csrfToken: res.locals.csrfToken,
+    title: 'Edit Laporan TKinerja', report, error: req.query.error || null, notice: req.query.notice || null,
+    maxImageMb: MAX_IMAGE_MB, maxEvidenceFiles: MAX_EVIDENCE_FILES, csrfToken: res.locals.csrfToken,
   });
 });
 
@@ -240,23 +282,28 @@ router.post('/:uuid', parseEvidenceUpload, async (req, res) => {
     if (!report) throw new Error('Laporan tidak ditemukan.');
     const input = validateInput(req.body);
     const folder = await ensureDateFolder(req.activeAccount.id, input.activityDate);
-    const evidence = await uploadEvidence(req, folder.id);
-    let evidenceId = report.evidence_file_id;
-    if (evidence) evidenceId = evidence.id;
-    if (req.body.remove_evidence === '1') evidenceId = null;
-
+    const evidence = await uploadEvidenceFiles(req, folder.id);
+    if (report.evidence.length + evidence.length > MAX_EVIDENCE_FILES) {
+      for (const file of evidence) await deleteEvidenceFile(req.activeAccount, file.id);
+      throw new Error(`Maksimum ${MAX_EVIDENCE_FILES} bukti gambar per laporan.`);
+    }
     await db.query(
-      `UPDATE kinerja_reports SET folder_id = ?, evidence_file_id = ?, activity_date = ?, title = ?,
+      `UPDATE kinerja_reports SET folder_id = ?, activity_date = ?, title = ?,
        start_time = ?, end_time = ?, description = ?, updated_at = ? WHERE id = ?`,
-      [folder.id, evidenceId, input.activityDate, input.title, input.startTime, input.endTime,
+      [folder.id, input.activityDate, input.title, input.startTime, input.endTime,
         input.description || null, Date.now(), report.id]
     );
-    if (report.evidence_file_id && report.evidence_file_id !== evidenceId) {
-      const oldFile = await fileService.getFile(report.evidence_file_id);
-      if (oldFile) {
-        await storageService.deleteRemote(req.activeAccount, oldFile).catch(() => {});
-        await fileService.deleteFile(oldFile.id);
+    try {
+      for (let index = 0; index < evidence.length; index++) {
+        await db.query('INSERT INTO kinerja_evidence (report_id, file_id, sort_order, created_at) VALUES (?, ?, ?, ?)',
+          [report.id, evidence[index].id, report.evidence.length + index, Date.now()]);
       }
+      if (!report.evidence_file_id && evidence[0]) {
+        await db.query('UPDATE kinerja_reports SET evidence_file_id = ? WHERE id = ?', [evidence[0].id, report.id]);
+      }
+    } catch (err) {
+      for (const file of evidence) await deleteEvidenceFile(req.activeAccount, file.id);
+      throw err;
     }
     await auditService.log(req, 'UPDATE_KINERJA', `Memperbarui laporan TKinerja "${input.title}" (${report.uuid})`).catch((auditErr) => {
       console.error('[TKinerja] Laporan diperbarui, tetapi audit log gagal:', auditErr.message);
@@ -266,21 +313,40 @@ router.post('/:uuid', parseEvidenceUpload, async (req, res) => {
     console.error('[TKinerja] Gagal memperbarui laporan:', err);
     return redirectWith(res, `/kinerja/${req.params.uuid}/edit`, 'error', err.message || 'Laporan gagal diperbarui.');
   } finally {
-    if (req.file && req.file.path) fs.promises.unlink(req.file.path).catch(() => {});
+    for (const file of req.files || []) fs.promises.unlink(file.path).catch(() => {});
   }
 });
 
-router.get('/:uuid/evidence', async (req, res) => {
+router.get('/:uuid/evidence/:evidenceId?', async (req, res) => {
   try {
     const report = await getOwnedReport(req.params.uuid, req.activeAccount.id);
-    if (!report || !report.evidence_file_id) return res.status(404).send('Bukti tidak ditemukan.');
-    const file = await fileService.getFile(report.evidence_file_id);
+    const evidence = report && (req.params.evidenceId
+      ? report.evidence.find((item) => String(item.evidence_id) === String(req.params.evidenceId))
+      : report.evidence[0]);
+    if (!evidence) return res.status(404).send('Bukti tidak ditemukan.');
+    const file = await fileService.getFile(evidence.file_id);
     res.setHeader('Content-Type', file.mime || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
     await storageService.downloadToStream(req.activeAccount, file, res);
     res.end();
   } catch (err) {
     if (!res.headersSent) res.status(500).send('Gagal memuat bukti: ' + err.message);
+  }
+});
+
+router.post('/:uuid/evidence/:evidenceId/delete', async (req, res) => {
+  try {
+    const report = await getOwnedReport(req.params.uuid, req.activeAccount.id);
+    const evidence = report && report.evidence.find((item) => String(item.evidence_id) === String(req.params.evidenceId));
+    if (!evidence) throw new Error('Bukti tidak ditemukan.');
+    await db.query('DELETE FROM kinerja_evidence WHERE id = ? AND report_id = ?', [evidence.evidence_id, report.id]);
+    await deleteEvidenceFile(req.activeAccount, evidence.file_id);
+    const remaining = report.evidence.filter((item) => item.evidence_id !== evidence.evidence_id);
+    await db.query('UPDATE kinerja_reports SET evidence_file_id = ?, updated_at = ? WHERE id = ?',
+      [remaining[0] ? remaining[0].file_id : null, Date.now(), report.id]);
+    return redirectWith(res, `/kinerja/${report.uuid}/edit`, 'notice', 'Bukti berhasil dihapus.');
+  } catch (err) {
+    return redirectWith(res, `/kinerja/${req.params.uuid}/edit`, 'error', err.message);
   }
 });
 
@@ -292,13 +358,7 @@ router.post('/:uuid/delete', async (req, res) => {
     for (const share of shares) await db.query('DELETE FROM shortlinks WHERE original_url LIKE ?', [`%/share/${share.uuid}%`]);
     await db.query("DELETE FROM shares WHERE item_type = 'kinerja' AND item_id = ?", [report.id]);
     await db.query('DELETE FROM kinerja_reports WHERE id = ?', [report.id]);
-    if (report.evidence_file_id) {
-      const file = await fileService.getFile(report.evidence_file_id);
-      if (file) {
-        await storageService.deleteRemote(req.activeAccount, file).catch(() => {});
-        await fileService.deleteFile(file.id);
-      }
-    }
+    for (const evidence of report.evidence) await deleteEvidenceFile(req.activeAccount, evidence.file_id);
     await auditService.log(req, 'DELETE_KINERJA', `Menghapus laporan TKinerja "${report.title}" (${report.uuid})`);
     redirectWith(res, '/kinerja', 'notice', 'Laporan kinerja berhasil dihapus.');
   } catch (err) {

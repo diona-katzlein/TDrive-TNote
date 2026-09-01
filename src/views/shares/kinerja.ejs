@@ -9,8 +9,11 @@
   .meta { background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:13px; }
   .meta small { display:block; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
   .description { white-space:pre-wrap; background:var(--panel-2); border-left:4px solid var(--accent); border-radius:8px; padding:16px; }
-  .evidence { margin-top:25px; text-align:center; }
-  .evidence img { max-width:100%; max-height:650px; object-fit:contain; border-radius:10px; border:1px solid var(--border); background:#000; }
+  .evidence { margin-top:25px; }
+  .evidence-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
+  .evidence figure { margin:0; text-align:center; }
+  .evidence img { width:100%; max-height:650px; object-fit:contain; border-radius:10px; border:1px solid var(--border); background:#000; }
+  .evidence figcaption { color:var(--muted); font-size:12px; margin-top:5px; }
   @media(max-width:600px){.meta-grid{grid-template-columns:1fr}.report-head,.report-body{padding:20px}}
   @media print {.topbar,.footer,.print-button{display:none!important}body{background:#fff;color:#111}.report-sheet{box-shadow:none;border:none;margin:0;max-width:none}.report-body{color:#111}.meta,.description{background:#f5f5f5;border-color:#ddd}.meta small{color:#555}}
 </style>
@@ -28,7 +31,13 @@
       <div class="meta"><small>Jam selesai</small><strong><%= String(report.end_time).slice(0,5) %></strong></div>
     </div>
     <% if (report.description) { %><h3>Isi Kegiatan</h3><div class="description"><%= report.description %></div><% } %>
-    <% if (report.evidence_file_id) { %><div class="evidence"><h3>Bukti Dukung</h3><img src="/share/<%= uuid %>/kinerja-evidence" alt="Bukti dukung <%= report.title %>"></div><% } %>
+    <% if (report.evidence && report.evidence.length) { %>
+      <div class="evidence"><h3>Bukti Dukung (<%= report.evidence.length %>)</h3><div class="evidence-grid">
+        <% report.evidence.forEach(function(item, index) { %>
+          <figure><a href="/share/<%= uuid %>/kinerja-evidence/<%= item.evidence_id %>" target="_blank"><img src="/share/<%= uuid %>/kinerja-evidence/<%= item.evidence_id %>" alt="Bukti dukung <%= index + 1 %> - <%= report.title %>"></a><figcaption>Bukti <%= index + 1 %></figcaption></figure>
+        <% }); %>
+      </div></div>
+    <% } %>
     <div class="print-button" style="margin-top:25px;text-align:center;"><button class="btn" onclick="window.print()">🖨️ Cetak / Simpan PDF</button></div>
   </section>
 </div>

@@ -403,13 +403,19 @@ router.get('/:uuid', async (req, res) => {
 
     if (share.item_type === 'kinerja') {
       const [reports] = await db.query(
-        `SELECT k.*, DATE_FORMAT(k.activity_date, '%Y-%m-%d') AS activity_date,
-                f.name AS evidence_name, f.mime AS evidence_mime
-         FROM kinerja_reports k LEFT JOIN files f ON f.id = k.evidence_file_id WHERE k.id = ?`,
+        `SELECT k.*, DATE_FORMAT(k.activity_date, '%Y-%m-%d') AS activity_date
+         FROM kinerja_reports k WHERE k.id = ?`,
         [share.item_id]
       );
       const report = reports[0];
       if (!report) return res.status(404).send('Laporan asal sudah dihapus.');
+      const [evidence] = await db.query(
+        `SELECT ke.id AS evidence_id, f.name, f.mime
+         FROM kinerja_evidence ke INNER JOIN files f ON f.id = ke.file_id
+         WHERE ke.report_id = ? ORDER BY ke.sort_order, ke.id`,
+        [report.id]
+      );
+      report.evidence = evidence;
       return res.render('shares/kinerja', { title: report.title, report, uuid });
     }
 
@@ -449,7 +455,7 @@ router.get('/:uuid', async (req, res) => {
 });
 
 // Tampilkan bukti gambar TKinerja publik
-router.get('/:uuid/kinerja-evidence', async (req, res) => {
+router.get('/:uuid/kinerja-evidence/:evidenceId?', async (req, res) => {
   try {
     const [shares] = await db.query('SELECT * FROM shares WHERE uuid = ?', [req.params.uuid]);
     const share = shares[0];
@@ -457,11 +463,19 @@ router.get('/:uuid/kinerja-evidence', async (req, res) => {
     if (share.password_hash && !(req.session.unlockedShares && req.session.unlockedShares[share.uuid])) {
       return res.status(403).send('Akses ditolak (butuh sandi).');
     }
-    const [reports] = await db.query('SELECT evidence_file_id, account_id FROM kinerja_reports WHERE id = ?', [share.item_id]);
-    const report = reports[0];
-    if (!report || !report.evidence_file_id) return res.status(404).send('Bukti tidak tersedia.');
-    const file = await fileService.getFile(report.evidence_file_id);
-    const account = await fileService.getAccount(report.account_id);
+    const params = [share.item_id];
+    let evidenceSql = `SELECT k.account_id, ke.file_id FROM kinerja_reports k
+      INNER JOIN kinerja_evidence ke ON ke.report_id = k.id WHERE k.id = ?`;
+    if (req.params.evidenceId) {
+      evidenceSql += ' AND ke.id = ?';
+      params.push(req.params.evidenceId);
+    }
+    evidenceSql += ' ORDER BY ke.sort_order, ke.id LIMIT 1';
+    const [evidenceRows] = await db.query(evidenceSql, params);
+    const evidence = evidenceRows[0];
+    if (!evidence) return res.status(404).send('Bukti tidak tersedia.');
+    const file = await fileService.getFile(evidence.file_id);
+    const account = await fileService.getAccount(evidence.account_id);
     if (!file || !account) return res.status(404).send('Bukti tidak tersedia.');
     res.setHeader('Content-Type', file.mime || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
