@@ -7,10 +7,10 @@
 <% if (error) { %><div class="alert error"><%= error %></div><% } %>
 
 <div class="card" style="max-width:720px;">
-  <form class="form" method="POST" action="<%= report ? '/kinerja/' + report.uuid : '/kinerja' %>" enctype="multipart/form-data">
+  <form class="form" method="POST" action="<%= report ? '/kinerja/' + report.uuid : '/kinerja' %>?_csrf=<%= encodeURIComponent(csrfToken) %>" enctype="multipart/form-data">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <label>Tanggal kegiatan
-      <input type="date" name="activity_date" value="<%= report ? String(report.activity_date).slice(0,10) : new Date().toISOString().slice(0,10) %>" required>
+      <input type="date" name="activity_date" value="<%= report ? String(report.activity_date).slice(0,10) : '' %>" required>
     </label>
     <label>Judul kegiatan
       <input type="text" name="title" maxlength="255" value="<%= report ? report.title : '' %>" placeholder="Contoh: Rapat koordinasi bulanan" required>
@@ -41,6 +41,15 @@
 (function(){
   var months=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
   var date=document.querySelector('[name="activity_date"]');
+  // Gunakan tanggal lokal browser, bukan UTC dari Date.toISOString().
+  // Field tetap tanpa min/max agar laporan backdate maupun tanggal mendatang dapat diisi.
+  if (!date.value) {
+    var now=new Date();
+    var year=now.getFullYear();
+    var month=String(now.getMonth()+1).padStart(2,'0');
+    var day=String(now.getDate()).padStart(2,'0');
+    date.value=year+'-'+month+'-'+day;
+  }
   function updateFolder(){var p=date.value.split('-');if(p.length===3){document.getElementById('monthName').textContent=months[Number(p[1])-1];document.getElementById('dateFolder').textContent=p[2]+'-'+p[1]+'-'+p[0];}}
   date.addEventListener('change',updateFolder);updateFolder();
   document.getElementById('evidence').addEventListener('change',function(){var img=document.getElementById('preview');if(this.files[0]){img.src=URL.createObjectURL(this.files[0]);img.style.display='block';}else{img.style.display='none';}});
