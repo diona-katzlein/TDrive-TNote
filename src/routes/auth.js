@@ -17,11 +17,22 @@ router.get('/login', (req, res) => {
   res.render('auth/login', { title: 'Login', error: null });
 });
 
+function isMfaEnabled(account) {
+  return Boolean(account && typeof account.mfa_secret === 'string' && account.mfa_secret.trim());
+}
+
+function clearPendingMfa(req) {
+  delete req.session.tempLoginPhone;
+  delete req.session.tempLoginAccountId;
+  delete req.session.tempLoginIsNew;
+}
+
 // Langkah 1: Cek nomor telepon (apakah sudah terdaftar dan punya password)
 router.post('/login/check-phone', async (req, res) => {
   const { phone } = req.body;
   try {
     if (!phone || !phone.trim()) throw new Error('Nomor telepon wajib diisi.');
+    clearPendingMfa(req);
     const normalized = accountService.normPhone(phone);
     
     // Cari apakah akun sudah terdaftar di database TDrive
@@ -94,8 +105,8 @@ router.post('/login/verify-password', async (req, res) => {
       });
     }
     
-    // Login berhasil! Cek MFA terlebih dahulu
-    if (account.mfa_secret) {
+    // MFA TDrive bersifat opsional dan hanya diminta jika pemilik sudah mengaktifkannya.
+    if (isMfaEnabled(account)) {
       req.session.tempLoginPhone = account.phone;
       req.session.tempLoginAccountId = account.id;
       return res.redirect('/login/mfa');
@@ -129,7 +140,7 @@ router.post('/login/verify', async (req, res) => {
         title: 'Verifikasi OTP',
         phone,
         needPassword: true,
-        error: 'Akun ini memakai 2FA. Masukkan password cloud Telegram Anda.',
+        error: 'Telegram meminta Password Cloud untuk akun ini.',
         csrfToken: res.locals.csrfToken,
       });
     }
@@ -137,8 +148,8 @@ router.post('/login/verify', async (req, res) => {
     const { account, isNew } = await accountService.ensureAccountFromLogin(result);
     delete req.session.loginId;
 
-    // Login berhasil! Cek MFA terlebih dahulu
-    if (account.mfa_secret) {
+    // MFA TDrive bersifat opsional dan hanya diminta jika pemilik sudah mengaktifkannya.
+    if (isMfaEnabled(account)) {
       req.session.tempLoginPhone = result.phone;
       req.session.tempLoginAccountId = account.id;
       req.session.tempLoginIsNew = isNew;
@@ -178,8 +189,9 @@ router.post('/login/mfa', async (req, res) => {
 
   try {
     const account = await fileService.getAccount(req.session.tempLoginAccountId);
-    if (!account || !account.mfa_secret) {
-      throw new Error('Pengaturan MFA tidak valid.');
+    if (!isMfaEnabled(account)) {
+      clearPendingMfa(req);
+      return res.redirect('/login');
     }
 
     const isValid = totpService.verifyTOTP(token, account.mfa_secret);
@@ -200,9 +212,7 @@ router.post('/login/mfa', async (req, res) => {
     const isNew = req.session.tempLoginIsNew;
 
     // Bersihkan sesi temporer
-    delete req.session.tempLoginPhone;
-    delete req.session.tempLoginAccountId;
-    delete req.session.tempLoginIsNew;
+    clearPendingMfa(req);
 
     res.redirect(isNew ? `/accounts/${account.id}/label?welcome=1` : '/drive');
   } catch (err) {
