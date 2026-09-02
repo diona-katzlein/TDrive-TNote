@@ -8,12 +8,10 @@ module.exports = {
       autorestart: true,
       watch: false, // Set true jika ingin auto-restart saat ada file source code yang berubah
       max_memory_restart: '800M', // Restart otomatis jika memori melebihi batas ini
+      // Keep PM2 limited to process-management settings. Application settings,
+      // including NODE_ENV and secrets, are loaded by dotenv from the project .env.
+      // Pin only the listener required by the Nginx upstream.
       env: {
-        NODE_ENV: 'production',
-      },
-      env_production: {
-        NODE_ENV: 'production',
-        // Pin the production listener so a stale PM2 daemon/shell PORT cannot override .env.
         PORT: 3101,
       },
       // Kustomisasi logging PM2

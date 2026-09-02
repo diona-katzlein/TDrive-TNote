@@ -41,9 +41,11 @@ else
     exit 1
 fi
 
-# 3. Start/reload menggunakan definisi ecosystem agar cwd, port, log, dan env konsisten.
-echo -e "\n${KUNING}[3/3] Reload PM2 process dari ecosystem.config.js...${NC}"
-pm2 startOrReload ecosystem.config.js --env production --update-env
+# 3. Recreate proses dari ecosystem. Menghapus proses lama mencegah PM2
+# mempertahankan NODE_ENV/PORT usang dari process dump atau daemon environment.
+echo -e "\n${KUNING}[3/3] Membuat ulang PM2 process dari ecosystem.config.js...${NC}"
+pm2 delete tdrive-app >/dev/null 2>&1 || true
+pm2 start ecosystem.config.js
 pm2 save
 
 # Keep this synchronized with ecosystem.config.js. Do not prefer the deployment
