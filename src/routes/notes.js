@@ -10,6 +10,7 @@ const fileService = require('../services/fileService');
 const storageService = require('../services/storageService');
 const noteCrypto = require('../services/noteCryptoService');
 const auditService = require('../services/auditService');
+const jobQueue = require('../services/jobQueue');
 const { requireActiveAccount } = require('../middleware/activeAccount');
 
 router.use(requireActiveAccount);
@@ -160,15 +161,18 @@ router.post('/reset', async (req, res) => {
   try {
     const account = req.activeAccount;
     
-    // Hapus pesan-pesan catatan di Telegram (best effort)
-    try {
-      const sqliteNotes = await noteService.listNotes(account.id, Buffer.alloc(32)); // Dummy key
-      for (const n of sqliteNotes) {
-        if (n.message_id) {
-          await storageService.deleteNoteMessage(account, n.message_id).catch(() => {});
-        }
-      }
-    } catch (_) {}
+    // Ambil metadata sinkronisasi tanpa mendekripsi isi catatan, lalu antrekan cleanup remote.
+    const [remoteNotes] = await db.query(
+      'SELECT message_id, peer FROM notes WHERE account_id = ? AND message_id IS NOT NULL',
+      [account.id]
+    );
+    for (const note of remoteNotes) {
+      await jobQueue.enqueue(
+        'storage.delete-note-message',
+        { accountId: account.id, messageId: note.message_id, peer: note.peer || null },
+        { accountId: account.id }
+      );
+    }
 
     // Hapus semua link sharing untuk catatan ini
     await db.query(`DELETE FROM shares WHERE item_type = 'note' AND item_id IN (SELECT id FROM notes WHERE account_id = ?)`, [account.id]);
@@ -428,20 +432,25 @@ router.post('/:uuid/delete', async (req, res) => {
   try {
     const note = await noteService.getNoteByUuid(uuid, key);
     if (note && note.account_id === req.activeAccount.id) {
+      let jobUuid = null;
       if (note.message_id) {
-        try {
-          await storageService.deleteNoteMessage(req.activeAccount, note.message_id, note.peer);
-        } catch (_) {
-          /* abaikan error remote */
-        }
+        jobUuid = await jobQueue.enqueue(
+          'storage.delete-note-message',
+          {
+            accountId: req.activeAccount.id,
+            messageId: note.message_id,
+            peer: note.peer || null,
+          },
+          { accountId: req.activeAccount.id }
+        );
       }
-      
+
       // Hapus share link terkait catatan
       await db.query("DELETE FROM shares WHERE item_type = 'note' AND item_id = ?", [note.id]);
-      
+
       await noteService.deleteNote(note.id);
-      
-      await auditService.log(req, 'DELETE_NOTE', `Menghapus catatan: "${note.title}" (UUID: ${note.uuid})`);
+
+      await auditService.log(req, 'DELETE_NOTE', `Menghapus catatan: "${note.title}" (UUID: ${note.uuid}${jobUuid ? `, Job UUID: ${jobUuid}` : ''})`);
     }
     res.redirect('/notes');
   } catch (err) {

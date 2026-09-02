@@ -1,0 +1,82 @@
+<%- include('partials/header') %>
+<div class="page-head">
+  <div><div class="breadcrumb">Search</div><h1>Universal Search</h1></div>
+</div>
+
+<% if (typeof notice !== 'undefined' && notice) { %><div class="alert success"><%= notice %></div><% } %>
+
+<form method="GET" action="/search" class="card form-grid">
+  <label class="field span-2">Kata kunci
+    <input type="search" name="q" value="<%= query %>" minlength="2" maxlength="100" placeholder="File, folder, note, TKinerja, shortlink…" autofocus>
+  </label>
+  <label class="field">Jenis
+    <select name="kind">
+      <% [['all','Semua'],['file','File'],['folder','Folder'],['note','TNote'],['kinerja','TKinerja'],['shortlink','TShort']].forEach(function(option) { %>
+        <option value="<%= option[0] %>" <%= filters.kind === option[0] ? 'selected' : '' %>><%= option[1] %></option>
+      <% }); %>
+    </select>
+  </label>
+  <label class="field">Urutkan
+    <select name="sort">
+      <% [['newest','Terbaru'],['oldest','Terlama'],['name','Nama'],['size_desc','Ukuran terbesar'],['size_asc','Ukuran terkecil']].forEach(function(option) { %>
+        <option value="<%= option[0] %>" <%= filters.sort === option[0] ? 'selected' : '' %>><%= option[1] %></option>
+      <% }); %>
+    </select>
+  </label>
+  <label class="field">MIME prefix
+    <input name="mime" maxlength="100" value="<%= filters.mime %>" placeholder="image/ atau application/pdf">
+  </label>
+  <label class="field">Kategori TNote
+    <input name="category" maxlength="100" value="<%= filters.category %>" placeholder="General">
+  </label>
+  <label class="field">Dari tanggal<input type="date" name="date_from" value="<%= filters.dateFrom %>"></label>
+  <label class="field">Sampai tanggal<input type="date" name="date_to" value="<%= filters.dateTo %>"></label>
+  <label class="field">Ukuran minimum (MB)<input type="number" min="0" step="0.1" name="min_size_mb" value="<%= filters.minSizeMb == null ? '' : filters.minSizeMb %>"></label>
+  <label class="field">Ukuran maksimum (MB)<input type="number" min="0" step="0.1" name="max_size_mb" value="<%= filters.maxSizeMb == null ? '' : filters.maxSizeMb %>"></label>
+  <div class="toolbar span-2"><button class="btn primary" type="submit">Cari</button><a class="btn" href="/search">Reset</a></div>
+</form>
+
+<% if (notesLocked && query && (filters.kind === 'all' || filters.kind === 'note')) { %>
+  <div class="alert info">TNote terkunci dan tidak ikut dicari. Buka TNote untuk menyertakan catatan terenkripsi.</div>
+<% } %>
+
+<div class="grid two">
+  <section class="card">
+    <h2>Filter tersimpan</h2>
+    <form method="POST" action="/search/saved" class="toolbar">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="q" value="<%= query %>">
+      <input type="hidden" name="kind" value="<%= filters.kind %>">
+      <input type="hidden" name="sort" value="<%= filters.sort %>">
+      <input type="hidden" name="mime" value="<%= filters.mime %>">
+      <input type="hidden" name="category" value="<%= filters.category %>">
+      <input type="hidden" name="date_from" value="<%= filters.dateFrom %>">
+      <input type="hidden" name="date_to" value="<%= filters.dateTo %>">
+      <input type="hidden" name="min_size_mb" value="<%= filters.minSizeMb == null ? '' : filters.minSizeMb %>">
+      <input type="hidden" name="max_size_mb" value="<%= filters.maxSizeMb == null ? '' : filters.maxSizeMb %>">
+      <input name="name" maxlength="80" required placeholder="Nama preset">
+      <button class="btn" type="submit">Simpan</button>
+    </form>
+    <div class="card-list">
+      <% saved.forEach(function(item) { %>
+        <div class="card"><div class="page-head"><div><strong><%= item.name %></strong><div class="hint"><%= item.query_text || 'Tanpa kata kunci' %></div></div><div class="toolbar"><a class="btn small" href="/search?saved=<%= item.uuid %>">Pakai</a><form method="POST" action="/search/saved/<%= item.uuid %>/delete"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small danger" type="submit">Hapus</button></form></div></div></div>
+      <% }); %>
+      <% if (!saved.length) { %><div class="hint">Belum ada filter tersimpan.</div><% } %>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Pencarian terbaru</h2>
+    <div class="toolbar">
+      <% recent.forEach(function(item) { %><a class="btn small" href="/search?q=<%= encodeURIComponent(item.query_text) %>"><%= item.query_text %></a><% }); %>
+      <% if (!recent.length) { %><span class="hint">Belum ada riwayat pencarian.</span><% } %>
+    </div>
+  </section>
+</div>
+
+<div class="card-list">
+  <% results.forEach(function(item) { %>
+    <a class="card" href="<%= item.url %>"><div class="page-head"><div><span class="badge"><%= item.kind %></span><h3><%= item.name %></h3><% if (item.detail) { %><span class="hint"><%= item.detail %></span><% } %></div><span aria-hidden="true">›</span></div></a>
+  <% }); %>
+  <% if (query.length >= 2 && !results.length) { %><div class="empty-state">Tidak ada hasil untuk “<%= query %>”.</div><% } %>
+</div>
+<%- include('partials/footer') %>

@@ -8,52 +8,60 @@ const fileService = require('../services/fileService');
 const storageService = require('../services/storageService');
 const cryptoService = require('../services/cryptoService');
 const auditService = require('../services/auditService');
+const { createWebdavLimiter } = require('../middleware/rateLimit');
+const { normalizeDavPath, parseBasicAuthorization, parseDepth } = require('../services/webdavSecurity');
 
 /**
  * Middleware Autentikasi HTTP Basic untuk WebDAV.
- * Memverifikasi nomor telepon (username) dan sandi/PIN sistem (password).
+ * Memverifikasi nomor telepon (username) dan password khusus WebDAV.
  */
 async function webdavAuth(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="TDrive WebDAV"');
+  const credentials = parseBasicAuthorization(req.headers.authorization);
+  req.webdavUsername = credentials ? credentials.username : '';
+  if (!credentials) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="TDrive WebDAV", charset="UTF-8"');
     return res.status(401).send('Unauthorized');
   }
-
   try {
-    const credentials = Buffer.from(authHeader.substring(6), 'base64').toString('ascii').split(':');
-    const phone = credentials[0];
-    const password = credentials[1];
-
-    if (!phone || !password) throw new Error('Kredensial tidak lengkap.');
-
-    const account = await fileService.getAccountByPhone(phone);
-    if (!account || !account.password_hash) {
-      throw new Error('Akun belum terkonfigurasi untuk masuk sandi.');
-    }
-
-    const isValid = cryptoService.verifyPassword(password, account.password_hash);
-    if (!isValid) throw new Error('Kata sandi salah.');
-
-    // Pasang akun aktif ke request
+    const account = await fileService.getAccountByPhone(credentials.username);
+    const isValid = Boolean(
+      account && account.webdav_password_hash &&
+      cryptoService.verifyPassword(credentials.password, account.webdav_password_hash)
+    );
+    if (!isValid) throw new Error('Invalid credentials');
     req.activeAccount = account;
     next();
   } catch (err) {
-    console.warn(`[WEBDAV AUTH] Gagal masuk: ${err.message}`);
-    res.setHeader('WWW-Authenticate', 'Basic realm="TDrive WebDAV"');
+    console.warn(`[${req.id || 'no-request-id'}] WebDAV authentication failed for ${credentials.username}`);
+    res.setHeader('WWW-Authenticate', 'Basic realm="TDrive WebDAV", charset="UTF-8"');
     return res.status(401).send('Unauthorized');
   }
 }
 
-// Gunakan basic auth untuk WebDAV
+router.use((req, res, next) => {
+  const length = Number(req.headers['content-length'] || 0);
+  if (!Number.isFinite(length) || length > Number(process.env.WEBDAV_MAX_BODY_BYTES || 65536)) {
+    return res.status(413).send('Payload Too Large');
+  }
+  if (!['OPTIONS', 'PROPFIND', 'GET', 'HEAD'].includes(req.method)) {
+    res.setHeader('Allow', 'OPTIONS, PROPFIND, GET, HEAD');
+    return res.status(405).send('Method Not Allowed');
+  }
+  next();
+});
+router.use((req, res, next) => {
+  const parsed = parseBasicAuthorization(req.headers.authorization);
+  req.webdavUsername = parsed ? parsed.username : '';
+  next();
+});
+router.use(createWebdavLimiter());
 router.use(webdavAuth);
 
 /**
  * Resolves virtual path string menjadi folder atau file di database
  */
 async function resolvePath(accountId, pathStr) {
-  const decodedPath = decodeURIComponent(pathStr);
-  const parts = decodedPath.split('/').filter(Boolean);
+  const { parts } = normalizeDavPath(pathStr);
   
   if (parts.length === 0) {
     return { folder: null, file: null, isRoot: true };
@@ -98,7 +106,7 @@ async function resolvePath(accountId, pathStr) {
 // 1. OPTIONS method
 router.options('/*', (req, res) => {
   res.setHeader('Allow', 'OPTIONS, GET, HEAD, PROPFIND');
-  res.setHeader('DAV', '1, 2');
+  res.setHeader('DAV', '1');
   res.status(200).end();
 });
 
@@ -110,6 +118,7 @@ router.all('/*', async (req, res, next) => {
   const accountId = req.activeAccount.id;
 
   try {
+    const depth = parseDepth(req.get('Depth'));
     const resolved = await resolvePath(accountId, pathStr);
     if (resolved.notFound) {
       return res.status(404).send('Not Found');
@@ -121,6 +130,11 @@ router.all('/*', async (req, res, next) => {
     if (resolved.isRoot) {
       items.push({ href: '/webdav/', name: 'Root', isFolder: true, updatedAt: req.activeAccount.created_at });
       
+      if (depth === 0) {
+        const xml = renderMultistatus(items);
+        res.setHeader('Content-Type', 'application/xml; charset="utf-8"');
+        return res.status(207).send(xml);
+      }
       const folders = await fileService.listFolders(accountId, null);
       for (const f of folders) {
         items.push({ href: `/webdav/${encodeURIComponent(f.name)}/`, name: f.name, isFolder: true, updatedAt: f.created_at });
@@ -136,6 +150,11 @@ router.all('/*', async (req, res, next) => {
       const f = resolved.folder;
       items.push({ href: `/webdav${pathStr.endsWith('/') ? pathStr : pathStr + '/'}`, name: f.name, isFolder: true, updatedAt: f.created_at });
       
+      if (depth === 0) {
+        const xml = renderMultistatus(items);
+        res.setHeader('Content-Type', 'application/xml; charset="utf-8"');
+        return res.status(207).send(xml);
+      }
       const folders = await fileService.listFolders(accountId, f.id);
       for (const sf of folders) {
         items.push({ href: `/webdav${pathStr.endsWith('/') ? pathStr : pathStr + '/'}${encodeURIComponent(sf.name)}/`, name: sf.name, isFolder: true, updatedAt: sf.created_at });
@@ -156,12 +175,28 @@ router.all('/*', async (req, res, next) => {
     res.setHeader('Content-Type', 'application/xml; charset="utf-8"');
     res.status(207).send(xml);
   } catch (err) {
-    console.error('[WEBDAV PROPFIND] Error:', err);
-    res.status(500).send(err.message);
+    console.error(`[${req.id || 'no-request-id'}] WebDAV PROPFIND failed`, err);
+    res.status(err.status || 500).send(err.status ? 'Invalid WebDAV Request' : 'Internal Server Error');
   }
 });
 
-// 3. GET method (Unduh file)
+// 3. HEAD method (metadata file tanpa mengunduh konten dari Telegram)
+router.head('/*', async (req, res) => {
+  try {
+    const resolved = await resolvePath(req.activeAccount.id, req.path);
+    if (!resolved.file) return res.status(404).end();
+
+    res.setHeader('Content-Type', resolved.file.mime || 'application/octet-stream');
+    res.setHeader('Content-Length', resolved.file.size);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(resolved.file.name)}"`);
+    return res.status(200).end();
+  } catch (err) {
+    console.error(`[${req.id || 'no-request-id'}] WebDAV HEAD failed`, err);
+    return res.status(err.status || 500).end();
+  }
+});
+
+// 4. GET method (Unduh file)
 router.get('/*', async (req, res) => {
   const pathStr = req.path;
   const accountId = req.activeAccount.id;
@@ -181,10 +216,8 @@ router.get('/*', async (req, res) => {
     await storageService.downloadToStream(req.activeAccount, file, res);
     res.end();
   } catch (err) {
-    console.error('[WEBDAV GET] Error:', err);
-    if (!res.headersSent) {
-      res.status(500).send(err.message);
-    }
+    console.error(`[${req.id || 'no-request-id'}] WebDAV GET failed`, err);
+    if (!res.headersSent) res.status(err.status || 500).send(err.status ? 'Invalid WebDAV Request' : 'Internal Server Error');
   }
 });
 
@@ -196,7 +229,7 @@ function renderMultistatus(hrefs) {
   xml += '<d:multistatus xmlns:d="DAV:">\n';
   for (const h of hrefs) {
     xml += '  <d:response>\n';
-    xml += `    <d:href>${h.href}</d:href>\n`;
+    xml += `    <d:href>${escapeXml(h.href)}</d:href>\n`;
     xml += '    <d:propstat>\n';
     xml += '      <d:prop>\n';
     xml += `        <d:displayname>${escapeXml(h.name)}</d:displayname>\n`;
@@ -218,8 +251,8 @@ function renderMultistatus(hrefs) {
 }
 
 function escapeXml(unsafe) {
-  if (!unsafe) return '';
-  return unsafe.replace(/[<>&'"]/g, function (c) {
+  if (unsafe === null || unsafe === undefined) return '';
+  return String(unsafe).replace(/[<>&'"]/g, function (c) {
     switch (c) {
       case '<': return '&lt;';
       case '>': return '&gt;';

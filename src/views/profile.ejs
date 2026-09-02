@@ -141,6 +141,50 @@
   </div>
 </div>
 
+<div class="profile-grid">
+  <section class="card">
+    <h2 style="margin-top:0;border-bottom:1px solid var(--border);padding-bottom:10px;">Perangkat & Sesi Aktif</h2>
+    <p class="hint">Sesi perangkat dicatat sebagai hash. Gunakan pencabutan sesi jika ada perangkat yang tidak dikenal.</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">
+      <% sessions.forEach(function(s) { %>
+        <div class="channel-card" style="align-items:flex-start;">
+          <div style="min-width:0;">
+            <strong><%= s.device_name %> <%= s.is_current ? '(Sesi ini)' : '' %></strong>
+            <div class="hint">IP: <%= s.ip_address || '-' %> · Terakhir aktif: <%= formatDate(s.last_seen_at) %></div>
+            <div class="hint">Dibuat: <%= formatDate(s.created_at) %></div>
+            <% if (s.revoked_at) { %><span class="status error">Dicabut <%= formatDate(s.revoked_at) %></span><% } else { %><span class="status active">Aktif</span><% } %>
+          </div>
+          <% if (!s.is_current && !s.revoked_at) { %>
+            <form method="POST" action="/profile/sessions/<%= s.id %>/revoke">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <button class="btn danger small" type="submit">Cabut</button>
+            </form>
+          <% } %>
+        </div>
+      <% }); %>
+    </div>
+    <form method="POST" action="/profile/sessions/revoke-all" style="margin-top:14px;" onsubmit="return confirm('Cabut seluruh sesi perangkat lain?');">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <button class="btn danger" type="submit">Cabut Semua Perangkat Lain</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-top:0;border-bottom:1px solid var(--border);padding-bottom:10px;">Password Khusus WebDAV</h2>
+    <p class="hint">Gunakan password terpisah untuk klien WebDAV. Jangan gunakan password/PIN login utama. Merotasi password akan langsung menonaktifkan kredensial WebDAV lama.</p>
+    <form method="POST" action="/profile/webdav-password" class="form" style="margin-top:14px;">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <label>Password WebDAV baru (minimal 16 karakter)
+        <input type="password" name="webdav_password" minlength="16" required autocomplete="new-password" />
+      </label>
+      <label>Konfirmasi password WebDAV
+        <input type="password" name="confirm_webdav_password" minlength="16" required autocomplete="new-password" />
+      </label>
+      <button class="btn" type="submit"><%= account.webdav_password_hash ? 'Rotasi Password WebDAV' : 'Aktifkan WebDAV' %></button>
+    </form>
+  </section>
+</div>
+
 <!-- PEER STORAGE & TELEGRAM CHANNELS -->
 <div class="card" style="margin-top: 24px;">
   <h2 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Saluran Penyimpanan Telegram (Storage Peer Selector)</h2>

@@ -1,188 +1,107 @@
 'use strict';
 
 const express = require('express');
-const router = express.Router();
-const path = require('path');
 const fs = require('fs');
-const { exec } = require('child_process');
-const os = require('os');
+const router = express.Router();
 
 const auditService = require('../services/auditService');
+const backupService = require('../services/backupService');
+const jobQueue = require('../services/jobQueue');
 const { requireAdmin } = require('../middleware/restrictAccess');
 
-// Hanya admin yang boleh mengakses backup
 router.use(requireAdmin);
 
-// Direktori penyimpanan backup
-const BACKUP_DIR = path.join(process.cwd(), 'data', 'backups');
-if (!fs.existsSync(BACKUP_DIR)) {
-  fs.mkdirSync(BACKUP_DIR, { recursive: true });
-}
-
-/**
- * Konfigurasi MariaDB / MySQL berdasarkan OS.
- */
-function getDbConfig() {
-  const isWindows = os.platform() === 'win32';
-  const binPath = isWindows
-    ? (process.env.MARIADB_BIN_PATH || 'C:\\wamp64\\bin\\mariadb\\mariadb11.5.2\\bin')
-    : '';
-
-  const host = process.env.DB_HOST || '127.0.0.1';
-  const port = process.env.DB_PORT || '3307';
-  const user = process.env.DB_USER || 'root';
-  const password = process.env.DB_PASSWORD || '';
-  const database = process.env.DB_DATABASE || 'tdrive';
-
-  return { isWindows, binPath, host, port, user, password, database };
-}
-
-/**
- * Bangun command mysqldump/mariadb-dump.
- */
-function buildDumpCommand(config, outputPath) {
-  const { isWindows, binPath, host, port, user, password, database } = config;
-
-  // Coba mariadb-dump dulu, fallback ke mysqldump
-  let dumpBin;
-  if (isWindows) {
-    const mariadbDump = path.join(binPath, 'mariadb-dump.exe');
-    const mysqlDump = path.join(binPath, 'mysqldump.exe');
-    dumpBin = fs.existsSync(mariadbDump) ? `"${mariadbDump}"` : `"${mysqlDump}"`;
-  } else {
-    // Linux: cek ketersediaan mariadb-dump atau mysqldump di $PATH
-    dumpBin = 'mariadb-dump || mysqldump';
-    // Kita gunakan which-based approach
-    dumpBin = 'mysqldump'; // fallback standar
-  }
-
-  let cmd = `${dumpBin} --host=${host} --port=${port} --user=${user}`;
-  if (password) {
-    cmd += ` --password=${password}`;
-  }
-  cmd += ` --single-transaction --routines --triggers --events ${database}`;
-  cmd += ` > "${outputPath}"`;
-
-  // Untuk Linux, kita coba mariadb-dump terlebih dahulu
-  if (!isWindows) {
-    cmd = `(command -v mariadb-dump > /dev/null 2>&1 && mariadb-dump --host=${host} --port=${port} --user=${user}${password ? ` --password=${password}` : ''} --single-transaction --routines --triggers --events ${database} > "${outputPath}") || (mysqldump --host=${host} --port=${port} --user=${user}${password ? ` --password=${password}` : ''} --single-transaction --routines --triggers --events ${database} > "${outputPath}")`;
-  }
-
-  return cmd;
-}
-
-// Halaman utama backup
 router.get('/', async (req, res) => {
   try {
-    // Baca daftar file backup yang ada
-    const files = fs.readdirSync(BACKUP_DIR)
-      .filter(f => f.endsWith('.sql'))
-      .map(f => {
-        const stat = fs.statSync(path.join(BACKUP_DIR, f));
-        return {
-          name: f,
-          size: stat.size,
-          created: stat.mtimeMs,
-        };
-      })
-      .sort((a, b) => b.created - a.created); // Terbaru di atas
-
-    const config = getDbConfig();
-
+    const backups = await backupService.listBackups();
+    const config = backupService.getDbConfig();
     res.render('backup', {
       title: 'Backup Database',
-      backups: files,
+      backups,
       dbConfig: {
         host: config.host,
         port: config.port,
         user: config.user,
         database: config.database,
-        os: config.isWindows ? 'Windows' : 'Linux',
-        binPath: config.isWindows ? config.binPath : '(System PATH)',
+        encrypted: true,
+        scheduleEnabled: process.env.BACKUP_SCHEDULE_ENABLED === 'true',
+        intervalHours: Number(process.env.BACKUP_INTERVAL_HOURS || 24),
+        retentionCount: Number(process.env.BACKUP_RETENTION_COUNT || 14),
+        secondaryEnabled: Boolean(process.env.BACKUP_SECONDARY_DIR),
+        restoreEnabled: process.env.BACKUP_RESTORE_ENABLED === 'true',
       },
       notice: req.query.notice || null,
       error: req.query.error || null,
       csrfToken: res.locals.csrfToken,
     });
   } catch (err) {
-    res.status(500).send('Gagal memuat halaman backup: ' + err.message);
+    console.error(`[${req.id || 'no-request-id'}] Gagal memuat halaman backup`, err);
+    res.status(500).send(`Gagal memuat halaman backup. ID referensi: ${req.id || 'tidak tersedia'}`);
   }
 });
 
-// Proses backup database
 router.post('/create', async (req, res) => {
   try {
-    const config = getDbConfig();
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = `tdrive_backup_${timestamp}.sql`;
-    const outputPath = path.join(BACKUP_DIR, filename);
-
-    const cmd = buildDumpCommand(config, outputPath);
-
-    console.log(`[Backup] Menjalankan backup database...`);
-    console.log(`[Backup] Command: ${cmd.replace(/--password=\S+/, '--password=***')}`);
-
-    await new Promise((resolve, reject) => {
-      exec(cmd, { maxBuffer: 100 * 1024 * 1024, shell: config.isWindows ? 'cmd.exe' : '/bin/bash' }, (error, stdout, stderr) => {
-        if (error) {
-          console.error('[Backup] Error:', error.message);
-          // Hapus file kosong jika ada
-          if (fs.existsSync(outputPath)) {
-            const stat = fs.statSync(outputPath);
-            if (stat.size === 0) fs.unlinkSync(outputPath);
-          }
-          return reject(new Error(stderr || error.message));
-        }
-        // Verifikasi file output
-        if (!fs.existsSync(outputPath)) {
-          return reject(new Error('File backup tidak ditemukan setelah proses dump.'));
-        }
-        const stat = fs.statSync(outputPath);
-        if (stat.size === 0) {
-          fs.unlinkSync(outputPath);
-          return reject(new Error('File backup kosong. Periksa konfigurasi database.'));
-        }
-        console.log(`[Backup] Berhasil: ${filename} (${(stat.size / 1024).toFixed(1)} KB)`);
-        resolve();
-      });
-    });
-
-    await auditService.log(req, 'DATABASE_BACKUP', `Membuat backup database: ${filename}`);
-    res.redirect('/backup?notice=' + encodeURIComponent(`Backup berhasil dibuat: ${filename}`));
+    const jobUuid = await jobQueue.enqueue('backup.create', { triggerType: 'manual' });
+    await auditService.log(req, 'DATABASE_BACKUP_QUEUED', `Menjadwalkan backup database terenkripsi (Job UUID: ${jobUuid})`);
+    res.redirect('/backup?notice=' + encodeURIComponent(`Backup terenkripsi dijadwalkan. Job: ${jobUuid}`));
   } catch (err) {
-    res.redirect('/backup?error=' + encodeURIComponent('Gagal membuat backup: ' + err.message));
+    console.error(`[${req.id || 'no-request-id'}] Penjadwalan backup manual gagal`, err);
+    res.redirect('/backup?error=' + encodeURIComponent(`Backup gagal dijadwalkan. ID referensi: ${req.id || 'tidak tersedia'}`));
   }
 });
 
-// Download file backup
-router.get('/download/:filename', (req, res) => {
-  const filename = req.params.filename;
-  // Sanitize: hanya izinkan karakter aman
-  if (!/^[\w\-]+\.sql$/.test(filename)) {
-    return res.status(400).send('Nama file tidak valid.');
+router.post('/verify/:filename', async (req, res) => {
+  const filePath = backupService.resolveBackupPath(req.params.filename);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.redirect('/backup?error=' + encodeURIComponent('File backup tidak ditemukan.'));
   }
-  const filePath = path.join(BACKUP_DIR, filename);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send('File backup tidak ditemukan.');
-  }
-  res.download(filePath, filename);
-});
-
-// Hapus file backup
-router.post('/delete/:filename', async (req, res) => {
-  const filename = req.params.filename;
-  if (!/^[\w\-]+\.sql$/.test(filename)) {
-    return res.redirect('/backup?error=' + encodeURIComponent('Nama file tidak valid.'));
-  }
-  const filePath = path.join(BACKUP_DIR, filename);
   try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      await auditService.log(req, 'DELETE_BACKUP', `Menghapus file backup: ${filename}`);
-    }
-    res.redirect('/backup?notice=' + encodeURIComponent(`Backup "${filename}" berhasil dihapus.`));
+    await backupService.verifyBackup(filePath);
+    await auditService.log(req, 'VERIFY_DATABASE_BACKUP', `Memverifikasi backup terenkripsi: ${req.params.filename}`);
+    return res.redirect('/backup?notice=' + encodeURIComponent(`Backup berhasil didekripsi dan diverifikasi: ${req.params.filename}`));
   } catch (err) {
-    res.redirect('/backup?error=' + encodeURIComponent('Gagal menghapus: ' + err.message));
+    console.error(`[${req.id || 'no-request-id'}] Verifikasi backup gagal`, err);
+    return res.redirect('/backup?error=' + encodeURIComponent(`Verifikasi backup gagal. ID referensi: ${req.id || 'tidak tersedia'}`));
+  }
+});
+
+router.post('/simulate/:filename', async (req, res) => {
+  try {
+    const result = await backupService.simulateRestore(req.params.filename);
+    await auditService.log(req, 'SIMULATE_DATABASE_RESTORE', `Simulasi restore berhasil untuk ${req.params.filename}: ${result.tables} tabel.`);
+    return res.redirect('/backup?notice=' + encodeURIComponent(`Simulasi restore berhasil: ${result.tables} tabel berhasil diimpor ke database terisolasi lalu dibersihkan.`));
+  } catch (err) {
+    console.error(`[${req.id || 'no-request-id'}] Simulasi restore gagal`, err);
+    return res.redirect('/backup?error=' + encodeURIComponent(`Simulasi restore gagal. ID referensi: ${req.id || 'tidak tersedia'}`));
+  }
+});
+
+router.post('/restore/:filename', async (req, res) => {
+  try {
+    await backupService.restoreBackup(req.params.filename, String(req.body.database_confirmation || ''));
+    await auditService.log(req, 'RESTORE_DATABASE', `Restore database dari backup terenkripsi: ${req.params.filename}`);
+    return res.redirect('/backup?notice=' + encodeURIComponent('Restore database selesai. Restart aplikasi dan lakukan pemeriksaan integritas.'));
+  } catch (err) {
+    console.error(`[${req.id || 'no-request-id'}] Restore database gagal`, err);
+    return res.redirect('/backup?error=' + encodeURIComponent(`Restore database ditolak atau gagal. ID referensi: ${req.id || 'tidak tersedia'}`));
+  }
+});
+
+router.get('/download/:filename', (req, res) => {
+  const filePath = backupService.resolveBackupPath(req.params.filename);
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).send('File backup tidak ditemukan.');
+  res.download(filePath, req.params.filename);
+});
+
+router.post('/delete/:filename', async (req, res) => {
+  try {
+    await backupService.removeBackup(req.params.filename);
+    await auditService.log(req, 'DELETE_BACKUP', `Menghapus file backup terenkripsi: ${req.params.filename}`);
+    res.redirect('/backup?notice=' + encodeURIComponent(`Backup "${req.params.filename}" berhasil dihapus.`));
+  } catch (err) {
+    console.error(`[${req.id || 'no-request-id'}] Penghapusan backup gagal`, err);
+    res.redirect('/backup?error=' + encodeURIComponent(`Gagal menghapus backup. ID referensi: ${req.id || 'tidak tersedia'}`));
   }
 });
 

@@ -8,6 +8,7 @@ const accountService = require('../services/accountService');
 const fileService = require('../services/fileService');
 const cryptoService = require('../services/cryptoService');
 const totpService = require('../services/totpService');
+const sessionService = require('../services/sessionService');
 
 // Halaman login (form nomor telepon)
 router.get('/login', (req, res) => {
@@ -114,10 +115,10 @@ router.post('/login/verify-password', async (req, res) => {
     
     await telegramManager.getClient(account);
     
-    req.session.authenticated = true;
-    req.session.userPhone = account.phone;
-    req.session.activeAccountId = account.id;
-    
+    await sessionService.rotateAndAuthenticate(req, {
+      phone: account.phone,
+      accountId: account.id,
+    });
     res.redirect('/drive');
   } catch (err) {
     res.render('auth/login', { title: 'Login', error: err.message });
@@ -156,10 +157,10 @@ router.post('/login/verify', async (req, res) => {
       return res.redirect('/login/mfa');
     }
 
-    req.session.authenticated = true;
-    req.session.userPhone = result.phone;
-    req.session.activeAccountId = account.id;
-
+    await sessionService.rotateAndAuthenticate(req, {
+      phone: result.phone,
+      accountId: account.id,
+    });
     res.redirect(isNew ? `/accounts/${account.id}/label?welcome=1` : '/drive');
   } catch (err) {
     res.render('auth/verify', {
@@ -206,14 +207,14 @@ router.post('/login/mfa', async (req, res) => {
     // Sambungkan Telegram client
     await telegramManager.getClient(account);
 
-    req.session.authenticated = true;
-    req.session.userPhone = req.session.tempLoginPhone;
-    req.session.activeAccountId = req.session.tempLoginAccountId;
+    const loginPhone = req.session.tempLoginPhone;
+    const loginAccountId = req.session.tempLoginAccountId;
     const isNew = req.session.tempLoginIsNew;
-
-    // Bersihkan sesi temporer
     clearPendingMfa(req);
-
+    await sessionService.rotateAndAuthenticate(req, {
+      phone: loginPhone,
+      accountId: loginAccountId,
+    });
     res.redirect(isNew ? `/accounts/${account.id}/label?welcome=1` : '/drive');
   } catch (err) {
     res.render('auth/mfa', {
@@ -225,7 +226,12 @@ router.post('/login/mfa', async (req, res) => {
 });
 
 // Logout
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  try {
+    await sessionService.revokeCurrent(req);
+  } catch (err) {
+    console.error('[Auth] Gagal menandai session logout sebagai revoked:', err);
+  }
   req.session.destroy(() => res.redirect('/login'));
 });
 

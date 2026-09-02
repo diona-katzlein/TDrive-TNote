@@ -1,3 +1,5 @@
+.notification-read { opacity: 0.68; }
+
 :root {
   color-scheme: light;
   --bg: #f8fafc;

@@ -84,6 +84,20 @@
 <% } %>
 
 <% if (viewMode === 'dates') { %>
+  <% if (recap) { %>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="kinerja-actions" style="justify-content:space-between;">
+        <div>
+          <strong>Rekap bulanan</strong>
+          <div class="hint"><%= recap.reports.length %> laporan · <%= Math.floor(recap.totalMinutes / 60) %> jam <%= recap.totalMinutes % 60 %> menit · <%= recap.totalEvidence %> bukti</div>
+        </div>
+        <div class="kinerja-actions">
+          <a class="btn small ghost" href="/kinerja/export/<%= selectedMonth.year %>/<%= selectedMonth.month %>.csv">Excel / CSV</a>
+          <a class="btn small" target="_blank" href="/kinerja/export/<%= selectedMonth.year %>/<%= selectedMonth.month %>/print">Cetak / PDF</a>
+        </div>
+      </div>
+    </div>
+  <% } %>
   <div class="folder-grid display-target">
     <% dates.forEach(function(d) { var parts = d.date_key.split('-'); %>
       <a class="folder-card" href="/kinerja/date/<%= d.date_key %>">

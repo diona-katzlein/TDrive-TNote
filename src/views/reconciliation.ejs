@@ -1,0 +1,92 @@
+<%- include('partials/header') %>
+
+<div class="page-head">
+  <div>
+    <div class="breadcrumb">Penyimpanan / Rekonsiliasi</div>
+    <h1>Rekonsiliasi Database & Telegram</h1>
+    <p class="hint">Memeriksa pemetaan chunk, ukuran, hash, serta keberadaan media Telegram untuk akun aktif.</p>
+  </div>
+</div>
+
+<% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+
+<div class="card" style="margin-bottom: 20px;">
+  <h2>Jalankan Pemeriksaan</h2>
+  <form method="POST" action="/reconciliation/run" class="form-grid">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <label>
+      Maksimum file
+      <input type="number" name="max_files" value="100" min="1" max="1000" required />
+    </label>
+    <label class="checkbox-row">
+      <input type="checkbox" name="verify_remote" value="1" checked />
+      Unduh streaming dan verifikasi media Telegram
+    </label>
+    <label class="checkbox-row">
+      <input type="checkbox" name="repair_missing_hashes" value="1" />
+      Isi hash yang kosong setelah ukuran dan konten berhasil diverifikasi
+    </label>
+    <label class="checkbox-row">
+      <input type="checkbox" name="repair_broken_evidence" value="1" />
+      Hapus junction bukti TKinerja yang terbukti kehilangan file atau lintas akun
+    </label>
+    <div class="alert info">
+      Perbaikan otomatis hanya mengisi SHA-256 kosong dan menghapus junction bukti yang demonstrably invalid. Pesan Telegram tidak dibuat ulang atau dihubungkan secara spekulatif.
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn primary">Jalankan Rekonsiliasi</button>
+      <a class="btn ghost" href="/jobs">Lihat Status / Retry</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Riwayat Pemeriksaan</h2>
+  <% if (!runs.length) { %>
+    <div class="empty-state">Belum ada rekonsiliasi untuk akun aktif.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Waktu</th><th>Status</th><th>File</th><th>Chunk</th><th>Masalah</th><th>Detail</th></tr></thead>
+        <tbody>
+          <% runs.forEach(function(run) { %>
+            <tr>
+              <td><%= formatDate(run.created_at) %></td>
+              <td><span class="badge"><%= run.status %></span></td>
+              <td><%= run.files_checked %></td>
+              <td><%= run.chunks_checked %></td>
+              <td><%= run.issues_found %></td>
+              <td>
+                <% if (!run.details.length) { %>
+                  <span class="hint">Tidak ada masalah.</span>
+                <% } else { %>
+                  <details>
+                    <summary><%= run.details.length %> catatan</summary>
+                    <ul>
+                      <% run.details.forEach(function(item) { %>
+                        <li>
+                          <strong><%= item.name || item.code || 'Run' %></strong>
+                          <% if (item.issues) { item.issues.forEach(function(issue) { %>
+                            <div><code><%= issue.code %></code>: <%= issue.detail %></div>
+                          <% }); } else if (item.detail) { %>
+                            <div><%= item.detail %></div>
+                          <% } %>
+                          <% if (item.repaired && item.repaired.length) { %>
+                            <div class="hint">Diperbaiki: <%= item.repaired.join(', ') %></div>
+                          <% } %>
+                        </li>
+                      <% }); %>
+                    </ul>
+                  </details>
+                <% } %>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>
+
+<%- include('partials/footer') %>

@@ -3,6 +3,7 @@
 // Map untuk melacak request: IP -> Array [timestamp]
 const globalStore = new Map();
 const authStore = new Map();
+const webdavStore = new Map();
 
 /**
  * Pembersih in-memory store berkala (setiap 5 menit) untuk membuang IP yang sudah tidak aktif
@@ -19,7 +20,12 @@ setInterval(() => {
     if (valid.length === 0) authStore.delete(ip);
     else authStore.set(ip, valid);
   }
-}, 5 * 60 * 1000);
+  for (const [key, timestamps] of webdavStore.entries()) {
+    const valid = timestamps.filter(t => now - t < 15 * 60 * 1000);
+    if (valid.length === 0) webdavStore.delete(key);
+    else webdavStore.set(key, valid);
+  }
+}, 5 * 60 * 1000).unref();
 
 /**
  * Helper mendapatkan IP klien dengan aman
@@ -85,7 +91,25 @@ function authLimiter(limit = Number(process.env.TDRIVE_AUTH_LIMIT || 15), window
   };
 }
 
+function createWebdavLimiter(limit = Number(process.env.WEBDAV_AUTH_LIMIT || 10), windowMs = 15 * 60 * 1000) {
+  return (req, res, next) => {
+    const username = String(req.webdavUsername || '').toLowerCase();
+    const key = `${getClientIp(req)}:${username}`;
+    const now = Date.now();
+    const timestamps = (webdavStore.get(key) || []).filter(t => now - t < windowMs);
+    if (timestamps.length >= limit) {
+      res.setHeader('Retry-After', String(Math.ceil(windowMs / 1000)));
+      return res.status(429).send('Too Many Requests');
+    }
+    timestamps.push(now);
+    webdavStore.set(key, timestamps);
+    next();
+  };
+}
+
 module.exports = {
-  globalLimiter: globalLimiter(),
   authLimiter: authLimiter(),
+  createWebdavLimiter,
+  globalLimiter: globalLimiter(),
+  getClientIp,
 };

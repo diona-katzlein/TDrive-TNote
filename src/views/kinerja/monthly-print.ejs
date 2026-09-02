@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %></title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #111; margin: 28px; font-size: 12px; }
+    h1 { margin: 0 0 5px; font-size: 22px; }
+    .summary { margin: 0 0 20px; color: #444; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #999; padding: 7px; text-align: left; vertical-align: top; }
+    th { background: #eee; }
+    tfoot td { font-weight: bold; }
+    .actions { margin-bottom: 18px; }
+    button { padding: 8px 14px; cursor: pointer; }
+    @media print { body { margin: 10mm; } .actions { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="actions"><button type="button" onclick="window.print()">Cetak / Simpan sebagai PDF</button></div>
+  <h1>Rekap TKinerja</h1>
+  <p class="summary"><%= monthName %> <%= year %> · <%= recap.reports.length %> laporan · <%= Math.floor(recap.totalMinutes / 60) %> jam <%= recap.totalMinutes % 60 %> menit · <%= recap.totalEvidence %> bukti</p>
+  <table>
+    <thead><tr><th>Tanggal</th><th>Kegiatan</th><th>Waktu</th><th>Durasi</th><th>Bukti</th><th>Deskripsi</th></tr></thead>
+    <tbody>
+      <% recap.reports.forEach(function(report) { %>
+        <tr>
+          <td><%= report.activity_date %></td>
+          <td><%= report.title %></td>
+          <td><%= String(report.start_time).slice(0,5) %>–<%= String(report.end_time).slice(0,5) %></td>
+          <td><%= report.duration_minutes %> menit</td>
+          <td><%= report.evidence_count %></td>
+          <td><%= report.description || '—' %></td>
+        </tr>
+      <% }); %>
+      <% if (!recap.reports.length) { %><tr><td colspan="6">Tidak ada laporan pada bulan ini.</td></tr><% } %>
+    </tbody>
+    <tfoot><tr><td colspan="3">TOTAL</td><td><%= recap.totalMinutes %> menit</td><td><%= recap.totalEvidence %></td><td></td></tr></tfoot>
+  </table>
+</body>
+</html>

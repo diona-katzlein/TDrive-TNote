@@ -196,14 +196,26 @@
   <p class="hint">Hasil pencarian untuk "<strong><%= query %></strong>"</p>
 <% } %>
 
+<form id="bulkForm" method="POST" action="/drive/bulk" class="toolbar" onsubmit="return confirm('Proses semua item yang dipilih?');">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+  <input type="hidden" name="back" value="<%= currentFolder ? '/drive/folder/' + currentFolder.uuid : '/drive' %>" />
+  <label class="hint"><input type="checkbox" id="selectAllItems" /> Pilih semua</label>
+  <select name="action" required>
+    <option value="">Aksi massal…</option>
+    <option value="verify">Verifikasi file</option>
+    <option value="delete">Pindahkan ke sampah</option>
+  </select>
+  <button class="btn small" type="submit">Terapkan</button>
+</form>
+
 <table class="grid">
   <thead>
-    <tr><th>Nama</th><th>Ukuran</th><th>Tipe</th><th>Tanggal</th><th>Aksi</th></tr>
+    <tr><th aria-label="Pilih"></th><th>Nama</th><th>Ukuran</th><th>Tipe</th><th>Tanggal</th><th>Aksi</th></tr>
   </thead>
   <tbody>
     <% if (currentFolder) { %>
       <tr>
-        <td colspan="5">
+        <td colspan="6">
           <a class="row-link" href="<%= currentFolder.parent_id ? '/drive/folder/' + allFolders.find(f => f.id === currentFolder.parent_id).uuid : '/drive' %>">⬅ .. (folder induk)</a>
         </td>
       </tr>
@@ -212,6 +224,7 @@
     <!-- Folders List -->
     <% folders.forEach(function(f){ %>
       <tr>
+        <td><input class="bulk-item" form="bulkForm" type="checkbox" name="folder_uuids" value="<%= f.uuid %>" aria-label="Pilih folder <%= f.name %>" /></td>
         <td><a class="row-link folder" href="/drive/folder/<%= f.uuid %>">📁 <%= f.name %></a></td>
         <td>—</td>
         <td>Folder</td>
@@ -238,6 +251,7 @@
     <!-- Files List -->
     <% files.forEach(function(file){ %>
       <tr>
+        <td><input class="bulk-item" form="bulkForm" type="checkbox" name="file_uuids" value="<%= file.uuid %>" aria-label="Pilih file <%= file.name %>" /></td>
         <td>📄 <%= file.name %><% if (file.is_chunked) { %> <span class="tag">chunked</span><% } %></td>
         <td><%= formatSize(file.size) %></td>
         <td><%= file.mime || '-' %></td>
@@ -290,10 +304,16 @@
     <% }); %>
 
     <% if (!folders.length && !files.length) { %>
-      <tr><td colspan="5" class="empty-row">Kosong. Unggah file atau buat folder.</td></tr>
+      <tr><td colspan="6" class="empty-row">Kosong. Unggah file atau buat folder.</td></tr>
     <% } %>
   </tbody>
 </table>
+
+<script>
+  document.getElementById('selectAllItems')?.addEventListener('change', function () {
+    document.querySelectorAll('.bulk-item').forEach((item) => { item.checked = this.checked; });
+  });
+</script>
 
 <% if (stats) { %>
   <p class="hint stats">Total: <strong><%= stats.count %></strong> file · <strong><%= formatSize(stats.total) %></strong> terpakai di drive ini.</p>

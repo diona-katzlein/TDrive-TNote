@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
+    "test": "node --test test/*.test.js",
+    "test:security": "node --test test/security.test.js",
+    "check:syntax": "node --check src/app.js && node --check src/config/security.js && node --check src/services/sessionService.js && node --check src/services/backupService.js && node --check src/services/reconciliationService.js && node --check src/services/webdavSecurity.js && node --check src/routes/webdav.js && node --check src/routes/backup.js && node --check src/routes/reconciliation.js",
     "migrate": "node src/db/migrate.js",
     "migrate:check": "node src/db/migrate.js --dry-run",
     "genkey": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""

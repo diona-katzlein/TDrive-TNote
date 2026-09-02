@@ -97,6 +97,77 @@ Jadikan akun **Telegram** Anda sebagai **Cloud Storage** pribadi (TDrive) dan **
 
 ---
 
+## Keamanan dan Operasi Production
+
+### Persyaratan startup
+
+Ketika `NODE_ENV=production`, aplikasi akan **gagal startup** apabila:
+
+- `SESSION_SECRET` tidak acak atau kurang dari 32 karakter.
+- `TDRIVE_MASTER_KEY` bukan kunci hex 32 byte (64 karakter).
+- `DB_USER=root`, password database kosong, atau password kurang dari 12 karakter.
+- `TDRIVE_HTTPS` tidak bernilai `true`.
+
+Gunakan reverse proxy HTTPS (misalnya Nginx) dan atur `TRUST_PROXY` hanya sesuai jumlah proxy yang benar-benar dipercaya. Jangan gunakan `TRUST_PROXY=true` pada topologi jaringan yang tidak terkontrol.
+
+### Session dan perangkat
+
+- Session ID dirotasi setelah autentikasi berhasil untuk mencegah session fixation.
+- Cookie production menggunakan `httpOnly`, `secure`, `sameSite=lax`, rolling expiry, dan prefix `__Host-`.
+- Daftar perangkat aktif, pencabutan satu session, dan logout perangkat lain tersedia pada halaman **Profile**.
+- Registry aplikasi hanya menyimpan hash SHA-256 session ID, bukan nilai cookie mentah.
+
+### WebDAV read-only
+
+WebDAV hanya menerima `OPTIONS`, `PROPFIND`, `HEAD`, dan `GET`. Pengguna wajib membuat password WebDAV khusus pada halaman **Profile**; password login web tidak dapat digunakan. Path, `Depth`, ukuran request, brute-force per IP/username, dan kepemilikan akun divalidasi oleh server.
+
+### Durable job queue dan notification center
+
+Operasi remote delete, verifikasi integritas, cleanup pesan TNote, rekonsiliasi, dan backup dipersistenkan pada MariaDB. Worker memakai lease, retry eksponensial, progress, recovery pekerjaan `running` yang stale setelah restart, serta status dead-letter. Halaman **Jobs** menampilkan status dan tombol Retry; hasil penting juga masuk ke **Notifications**. Atur `JOB_WORKER_ENABLED`, `JOB_POLL_MS`, dan `JOB_LEASE_MS` sesuai kapasitas worker.
+
+Upload browser biasa masih diselesaikan dalam request agar file sementara tidak hilang. Upload chunk besar dicatat pada `upload_sessions`, terikat pada akun, dan muncul di dashboard/reconciliation jika gagal atau stale.
+
+### Search, bulk actions, dan TKinerja export
+
+- Search header mencari file, folder, TKinerja, shortlink, dan TNote yang sedang unlocked pada akun aktif. Isi TNote tidak dibuatkan indeks plaintext global.
+- Drive menyediakan pemilihan massal untuk soft-delete file/folder dan penjadwalan verifikasi integritas file. Server mengulang validasi kepemilikan setiap UUID.
+- TKinerja menyediakan rekap durasi/jumlah bukti bulanan, CSV UTF-8 yang kompatibel Excel, serta tampilan cetak untuk **Save as PDF** native browser.
+
+### Backup terenkripsi dan disaster recovery
+
+Backup dibuat dengan `mariadb-dump`/`mysqldump` tanpa shell interpolation. Password database diberikan melalui environment child process dan tidak dimasukkan ke command line. Output SQL langsung dienkripsi dengan AES-256-GCM menjadi `.sql.enc`; plaintext tidak ditulis ke direktori backup.
+
+```env
+BACKUP_ENCRYPTION_KEY=<64 karakter hex, berbeda dari master key>
+BACKUP_SCHEDULE_ENABLED=true
+BACKUP_INTERVAL_HOURS=24
+BACKUP_RETENTION_COUNT=14
+BACKUP_SECONDARY_DIR=D:\\backup-secondary
+BACKUP_RESTORE_ENABLED=false
+```
+
+Jika `BACKUP_SECONDARY_DIR` diisi, artifact terenkripsi direplikasi secara atomik dan checksum salinan diverifikasi. Tombol **Simulasi** mendekripsi ke file temporer berizin terbatas, mengimpor ke database terisolasi, memeriksa jumlah tabel, lalu selalu menghapus database dan plaintext sementara. Restore ke database aktif dinonaktifkan secara default; aktifkan `BACKUP_RESTORE_ENABLED=true` hanya pada maintenance terencana dan ketik nama database dengan tepat pada form. Ambil backup terbaru dan hentikan traffic aplikasi sebelum restore produksi.
+
+Simpan `BACKUP_ENCRYPTION_KEY` di secret manager/offline vault yang terpisah dari kedua lokasi backup. Kehilangan kunci berarti seluruh backup tidak dapat dipulihkan.
+
+### Rekonsiliasi dan storage health
+
+Menu admin **Rekonsiliasi** memeriksa urutan/ukuran chunk, flag metadata, media Telegram, ukuran streaming, SHA-256, junction bukti TKinerja yang rusak, dan upload setengah selesai. Perbaikan otomatis konservatif: mengisi hash kosong setelah verifikasi atau menghapus junction yang terbukti kehilangan file/lintas akun. Sistem tidak membuat ulang atau menghubungkan pesan Telegram secara spekulatif.
+
+Dashboard **Health** menampilkan penggunaan storage, soft quota, pertumbuhan harian/bulanan, chunk, file terbesar, upload gagal, status pekerjaan, backup terakhir, dan status koneksi/otorisasi Telegram. Alert quota dan session invalid dideduplikasi selama 24 jam. Atur `STORAGE_QUOTA_BYTES`, `STORAGE_QUOTA_WARN_PERCENT`, dan `UPLOAD_STALE_MINUTES` bila diperlukan.
+
+### Validasi sebelum deploy
+
+```cmd
+npm test
+npm run check:syntax
+npm run migrate:check
+```
+
+CSP saat ini bersifat transisional karena template lama masih memiliki inline script/style. Sumber eksternal tetap dibatasi, tetapi migrasi inline asset ke file statis/nonce diperlukan sebelum menghapus `unsafe-inline`.
+
+---
+
 ## Donasi & Dukungan
 
 Proyek ini gratis dan open-source. Jika Anda menyukai proyek ini, silakan berikan donasi Anda untuk mendukung kelangsungan pengembangannya:

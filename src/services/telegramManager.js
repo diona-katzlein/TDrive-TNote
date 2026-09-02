@@ -269,6 +269,27 @@ async function cancelLogin(loginId) {
   }
 }
 
+async function health(account) {
+  try {
+    const client = await getClient(account);
+    const authorized = await client.isUserAuthorized();
+    return {
+      connected: Boolean(client.connected),
+      authorized: Boolean(authorized),
+      status: authorized ? 'healthy' : 'reauth_required',
+      checkedAt: Date.now(),
+    };
+  } catch (error) {
+    const message = String(error && (error.errorMessage || error.message) || '');
+    return {
+      connected: false,
+      authorized: false,
+      status: /AUTH_KEY|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED/i.test(message) ? 'session_invalid' : 'unavailable',
+      checkedAt: Date.now(),
+    };
+  }
+}
+
 module.exports = {
   getClient,
   withFloodRetry,
@@ -280,4 +301,5 @@ module.exports = {
   cancelLogin,
   isTestDc,
   TEST_DC_PUBLIC_KEY,
+  health,
 };

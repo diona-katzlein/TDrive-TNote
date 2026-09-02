@@ -12,6 +12,7 @@ const auditService = require('../services/auditService');
 const telegramManager = require('../services/telegramManager');
 const { isPhoneAllowed } = require('../services/accountService');
 const { requireActiveAccount } = require('../middleware/activeAccount');
+const sessionService = require('../services/sessionService');
 
 // Tampilkan profil pengguna
 router.get('/', requireActiveAccount, async (req, res) => {
@@ -22,6 +23,7 @@ router.get('/', requireActiveAccount, async (req, res) => {
 
     // Ambil daftar private channel buatan user
     const [channels] = await db.query('SELECT * FROM user_channels WHERE account_id = ? ORDER BY created_at DESC', [account.id]);
+    const sessions = await sessionService.listForAccount(account.id, req.sessionID);
 
     res.render('profile', {
       title: 'Profil Saya',
@@ -29,6 +31,7 @@ router.get('/', requireActiveAccount, async (req, res) => {
       phone,
       isAllowed,
       channels,
+      sessions,
       notice: req.query.notice || null,
       error: req.query.error || null,
       csrfToken: res.locals.csrfToken,
@@ -49,9 +52,46 @@ router.post('/password', requireActiveAccount, async (req, res) => {
     const hash = cryptoService.hashPassword(password);
     
     await fileService.updateAccountPassword(account.id, hash);
-    await auditService.log(req, 'UPDATE_PASSWORD', 'Memperbarui kata sandi masuk sistem.');
+    await sessionService.revokeAll(account.id, req.sessionID, false);
+    await auditService.log(req, 'UPDATE_PASSWORD', 'Memperbarui kata sandi masuk sistem dan mencabut sesi perangkat lain.');
 
-    res.redirect('/profile?notice=' + encodeURIComponent('Kata sandi / PIN sistem berhasil diperbarui.'));
+    res.redirect('/profile?notice=' + encodeURIComponent('Kata sandi berhasil diperbarui dan sesi perangkat lain telah dicabut.'));
+  } catch (err) {
+    res.redirect('/profile?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// Kelola password khusus WebDAV agar password login utama tidak dipakai aplikasi pihak ketiga.
+router.post('/webdav-password', requireActiveAccount, async (req, res) => {
+  try {
+    const password = String(req.body.webdav_password || '');
+    const confirm = String(req.body.confirm_webdav_password || '');
+    if (password.length < 16) throw new Error('Password WebDAV minimal 16 karakter.');
+    if (password !== confirm) throw new Error('Konfirmasi password WebDAV tidak cocok.');
+    await db.query('UPDATE accounts SET webdav_password_hash = ? WHERE id = ?', [cryptoService.hashPassword(password), req.activeAccount.id]);
+    await auditService.log(req, 'UPDATE_WEBDAV_PASSWORD', 'Membuat atau merotasi password khusus WebDAV.');
+    res.redirect('/profile?notice=' + encodeURIComponent('Password khusus WebDAV berhasil diperbarui.'));
+  } catch (err) {
+    res.redirect('/profile?error=' + encodeURIComponent(err.message));
+  }
+});
+
+router.post('/sessions/:id/revoke', requireActiveAccount, async (req, res) => {
+  try {
+    const revoked = await sessionService.revoke(req.activeAccount.id, Number(req.params.id), req.sessionID);
+    if (!revoked) throw new Error('Sesi tidak ditemukan atau merupakan sesi aktif saat ini.');
+    await auditService.log(req, 'REVOKE_SESSION', `Mencabut sesi perangkat ID ${Number(req.params.id)}.`);
+    res.redirect('/profile?notice=' + encodeURIComponent('Sesi perangkat berhasil dicabut.'));
+  } catch (err) {
+    res.redirect('/profile?error=' + encodeURIComponent(err.message));
+  }
+});
+
+router.post('/sessions/revoke-all', requireActiveAccount, async (req, res) => {
+  try {
+    const count = await sessionService.revokeAll(req.activeAccount.id, req.sessionID, false);
+    await auditService.log(req, 'REVOKE_ALL_SESSIONS', `Mencabut ${count} sesi perangkat lain.`);
+    res.redirect('/profile?notice=' + encodeURIComponent(`${count} sesi perangkat lain berhasil dicabut.`));
   } catch (err) {
     res.redirect('/profile?error=' + encodeURIComponent(err.message));
   }

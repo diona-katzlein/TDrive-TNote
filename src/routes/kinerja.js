@@ -10,6 +10,7 @@ const db = require('../db');
 const fileService = require('../services/fileService');
 const storageService = require('../services/storageService');
 const auditService = require('../services/auditService');
+const { csvCell, validMonth } = require('../services/phase2Validation');
 const { requireActiveAccount } = require('../middleware/activeAccount');
 
 const router = express.Router();
@@ -107,6 +108,25 @@ async function getOwnedReport(uuid, accountId) {
   return report;
 }
 
+async function monthlyRecap(accountId, year, month) {
+  const [reports] = await db.query(
+    `SELECT DATE_FORMAT(k.activity_date, '%Y-%m-%d') AS activity_date,
+            k.title, k.start_time, k.end_time, k.description,
+            TIMESTAMPDIFF(MINUTE, CONCAT(k.activity_date, ' ', k.start_time), CONCAT(k.activity_date, ' ', k.end_time)) AS duration_minutes,
+            COUNT(ke.id) AS evidence_count
+     FROM kinerja_reports k
+     LEFT JOIN kinerja_evidence ke ON ke.report_id = k.id
+     WHERE k.account_id = ? AND YEAR(k.activity_date) = ? AND MONTH(k.activity_date) = ?
+     GROUP BY k.id ORDER BY k.activity_date, k.start_time`,
+    [accountId, Number(year), Number(month)]
+  );
+  return {
+    reports,
+    totalMinutes: reports.reduce((sum, report) => sum + Number(report.duration_minutes || 0), 0),
+    totalEvidence: reports.reduce((sum, report) => sum + Number(report.evidence_count || 0), 0),
+  };
+}
+
 async function uploadEvidenceFiles(req, folderId) {
   const uploaded = [];
   try {
@@ -148,6 +168,7 @@ function renderKinerja(res, req, data) {
     reports: data.reports || [],
     selectedMonth: data.selectedMonth || null,
     selectedDate: data.selectedDate || null,
+    recap: data.recap || null,
     notice: req.query.notice || null,
     error: req.query.error || null,
     createdPassword: req.query.created_pass || null,
@@ -175,10 +196,47 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/export/:year/:month.csv', async (req, res) => {
+  const year = String(req.params.year);
+  const month = String(req.params.month).padStart(2, '0');
+  if (!validMonth(year, month)) return res.status(400).send('Bulan tidak valid.');
+  try {
+    const recap = await monthlyRecap(req.activeAccount.id, year, month);
+    const rows = [
+      ['Tanggal', 'Kegiatan', 'Mulai', 'Selesai', 'Durasi (menit)', 'Jumlah bukti', 'Deskripsi'],
+      ...recap.reports.map((report) => [report.activity_date, report.title, String(report.start_time).slice(0, 5), String(report.end_time).slice(0, 5), report.duration_minutes, report.evidence_count, report.description]),
+      ['', 'TOTAL', '', '', recap.totalMinutes, recap.totalEvidence, ''],
+    ];
+    const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="tkinerja-${year}-${month}.csv"`);
+    return res.send(csv);
+  } catch (error) {
+    console.error(`[${req.id || 'no-request-id'}] Export TKinerja gagal`, error);
+    return res.status(500).send('Export TKinerja gagal.');
+  }
+});
+
+router.get('/export/:year/:month/print', async (req, res) => {
+  const year = String(req.params.year);
+  const month = String(req.params.month).padStart(2, '0');
+  if (!validMonth(year, month)) return res.status(400).send('Bulan tidak valid.');
+  try {
+    const recap = await monthlyRecap(req.activeAccount.id, year, month);
+    return res.render('kinerja/monthly-print', {
+      title: `Rekap TKinerja ${MONTHS[Number(month) - 1]} ${year}`,
+      year, month, monthName: MONTHS[Number(month) - 1], recap,
+    });
+  } catch (error) {
+    console.error(`[${req.id || 'no-request-id'}] Rekap cetak TKinerja gagal`, error);
+    return res.status(500).send('Rekap cetak TKinerja gagal.');
+  }
+});
+
 router.get('/month/:year/:month', async (req, res) => {
   const year = String(req.params.year);
   const month = String(req.params.month).padStart(2, '0');
-  if (!/^\d{4}$/.test(year) || !/^(0[1-9]|1[0-2])$/.test(month)) return res.status(400).send('Bulan tidak valid.');
+  if (!validMonth(year, month)) return res.status(400).send('Bulan tidak valid.');
   try {
     const [dates] = await db.query(
       `SELECT DATE_FORMAT(k.activity_date, '%Y-%m-%d') AS date_key, COUNT(DISTINCT k.id) AS report_count,
@@ -190,7 +248,8 @@ router.get('/month/:year/:month', async (req, res) => {
       [req.activeAccount.id, Number(year), Number(month)]
     );
     const selectedMonth = { year, month, folder_name: `Kinerja-${MONTHS[Number(month) - 1]}` };
-    return renderKinerja(res, req, { title: `${selectedMonth.folder_name} ${year}`, viewMode: 'dates', dates, selectedMonth });
+    const recap = await monthlyRecap(req.activeAccount.id, year, month);
+    return renderKinerja(res, req, { title: `${selectedMonth.folder_name} ${year}`, viewMode: 'dates', dates, selectedMonth, recap });
   } catch (err) {
     return res.status(500).send('Gagal memuat tanggal TKinerja: ' + err.message);
   }

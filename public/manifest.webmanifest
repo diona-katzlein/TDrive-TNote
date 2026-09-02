@@ -1,0 +1,35 @@
+{
+  "id": "/",
+  "name": "TDrive & TNote",
+  "short_name": "TDrive",
+  "description": "Private Telegram-backed drive, encrypted notes, and work reports.",
+  "lang": "id",
+  "dir": "ltr",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "TDrive",
+      "short_name": "Drive",
+      "url": "/drive",
+      "icons": [{ "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Universal Search",
+      "short_name": "Search",
+      "url": "/search",
+      "icons": [{ "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}

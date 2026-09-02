@@ -5,6 +5,16 @@ require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
+const {
+  assertProductionConfig,
+  isProduction,
+  requestId,
+  securityHeaders,
+  sessionCookieOptions,
+  trustProxySetting,
+} = require('./config/security');
+
+assertProductionConfig();
 
 // Inisialisasi DB (MariaDB Pool)
 const db = require('./db');
@@ -13,10 +23,17 @@ const { activeAccount } = require('./middleware/activeAccount');
 const { requireLogin } = require('./middleware/auth');
 const { csrf } = require('./middleware/csrf');
 const { isPhoneAllowed } = require('./services/accountService');
+const logger = require('./services/logger');
 
 // Middleware Keamanan Baru
 const { globalLimiter, authLimiter } = require('./middleware/rateLimit');
 const honeypot = require('./middleware/honeypot');
+const sessionService = require('./services/sessionService');
+const backupService = require('./services/backupService');
+const jobQueue = require('./services/jobQueue');
+const { registerJobHandlers } = require('./services/jobHandlers');
+const notificationService = require('./services/notificationService');
+registerJobHandlers();
 
 const authRouter = require('./routes/auth');
 const accountsRouter = require('./routes/accounts');
@@ -29,11 +46,40 @@ const webdavRouter = require('./routes/webdav');
 const workspaceRouter = require('./routes/workspace');
 const auditLogsRouter = require('./routes/auditLogs');
 const backupRouter = require('./routes/backup');
+const reconciliationRouter = require('./routes/reconciliation');
 const shortlinkRouter = require('./routes/shortlink');
 const kinerjaRouter = require('./routes/kinerja');
+const jobsRouter = require('./routes/jobs');
+const notificationsRouter = require('./routes/notifications');
+const searchRouter = require('./routes/search');
+const healthRouter = require('./routes/health');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.disable('x-powered-by');
+app.set('trust proxy', trustProxySetting());
+app.use((req, res, next) => {
+  req.id = requestId(req);
+  res.setHeader('X-Request-ID', req.id);
+  next();
+});
+app.use(logger.requestLogger);
+app.use(securityHeaders);
+
+app.get('/healthz', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ status: 'ok' });
+});
+app.get('/readyz', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    await db.query('SELECT 1');
+    res.json({ status: 'ready', database: 'reachable' });
+  } catch (error) {
+    logger.error('readiness_check_failed', { requestId: req.id, error });
+    res.status(503).json({ status: 'not_ready', database: 'unreachable' });
+  }
+});
 
 // View engine
 app.set('view engine', 'ejs');
@@ -54,9 +100,11 @@ app.use(
     key: 'tdrive_session',
     secret: process.env.SESSION_SECRET || 'tdrive-dev-secret',
     store: sessionStore,
+    name: isProduction ? '__Host-tdrive_session' : 'tdrive_session',
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 1000 * 60 * 60 * 24 * 30 }, // 30 hari sesi persisten
+    rolling: true,
+    cookie: sessionCookieOptions(),
   })
 );
 
@@ -93,8 +141,21 @@ app.use('/login', authLimiter);
 // Rute autentikasi (tidak terproteksi): /login, /login/send-code, /login/verify, /logout
 app.use(authRouter);
 
+// Tolak session perangkat yang sudah dicabut sebelum memuat data akun.
+app.use(sessionService.ensureActive);
+
 // Sediakan daftar akun + akun aktif ke semua view terproteksi (jika sudah login)
 app.use(activeAccount);
+app.use(async (req, res, next) => {
+  try {
+    res.locals.unreadNotifications = req.activeAccount
+      ? await notificationService.unreadCount(req.activeAccount.id, req.session.userPhone)
+      : 0;
+  } catch (_) {
+    res.locals.unreadNotifications = 0;
+  }
+  next();
+});
 
 // Rute berbagi publik (akses terbuka untuk umum, tidak masuk requireLogin)
 app.use('/share', shareRouter);
@@ -153,20 +214,26 @@ app.use('/kinerja', kinerjaRouter);
 // app.use('/workspace', workspaceRouter);
 app.use('/audit-trail-logs', auditLogsRouter);
 app.use('/backup', backupRouter);
+app.use('/reconciliation', reconciliationRouter);
+app.use('/jobs', jobsRouter);
+app.use('/notifications', notificationsRouter);
+app.use('/search', searchRouter);
+app.use('/health', healthRouter);
 
 // 404
 app.use((req, res) => res.status(404).send('Halaman tidak ditemukan.'));
 
-// Global error handler (termasuk penanganan Payload Too Large)
+// Global error handler: detail internal hanya ditulis ke log server.
 app.use((err, req, res, next) => {
+  logger.error('unhandled_request_error', { requestId: req.id, error: err });
+  if (res.headersSent) return next(err);
   if (err.status === 413 || err.type === 'entity.too.large') {
-    res.status(413).render('error-payload', {
+    return res.status(413).render('error-payload', {
       title: 'Payload Terlalu Besar',
-      error: 'Ukuran data request melebihi batas maksimal yang diizinkan (maksimal 20MB).'
+      error: 'Ukuran data request melebihi batas maksimal yang diizinkan.'
     });
-  } else {
-    res.status(500).send('Terjadi kesalahan internal: ' + err.message);
   }
+  res.status(500).send(`Terjadi kesalahan internal. ID referensi: ${req.id || 'tidak tersedia'}`);
 });
 
 // Mulai Database dan Server secara Asinkron
@@ -174,6 +241,8 @@ async function start() {
   try {
     // Jalankan migrasi MariaDB
     await db.init();
+    backupService.startScheduler(() => jobQueue.enqueue('backup.create', { triggerType: 'scheduled' }));
+    await jobQueue.start();
     
     app.listen(PORT, () => {
       console.log(`TDrive berjalan di http://localhost:${PORT}`);

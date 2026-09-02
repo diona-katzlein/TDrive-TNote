@@ -10,6 +10,7 @@ const db = require('../db');
 const fileService = require('../services/fileService');
 const storageService = require('../services/storageService');
 const auditService = require('../services/auditService');
+const jobQueue = require('../services/jobQueue');
 const { requireActiveAccount } = require('../middleware/activeAccount');
 
 const TMP_DIR = path.join(process.cwd(), 'data', 'tmp');
@@ -161,21 +162,41 @@ const chunkUpload = multer({ dest: path.join(process.cwd(), 'data', 'tmp', 'chun
 router.post('/upload-chunk', chunkUpload.single('chunk'), async (req, res) => {
   const { chunk_index, total_chunks, upload_id, filename, folder_uuid } = req.body;
   const chunkFile = req.file;
+  const uploadId = String(upload_id || '');
+  const total = Number(total_chunks);
+  const index = Number(chunk_index);
 
   try {
     if (!chunkFile) throw new Error('Berkas chunk kosong.');
+    if (!/^[A-Za-z0-9_-]{8,100}$/.test(uploadId)) throw new Error('Upload ID tidak valid.');
+    if (!Number.isInteger(total) || total < 1 || total > 100000) throw new Error('Jumlah chunk tidak valid.');
+    if (!Number.isInteger(index) || index < 0 || index >= total) throw new Error('Index chunk tidak valid.');
+    if (!filename || String(filename).length > 255) throw new Error('Nama file tidak valid.');
 
-    const chunkDir = path.join(process.cwd(), 'data', 'tmp', 'uploads', upload_id);
+    const now = Date.now();
+    await db.query(
+      `INSERT INTO upload_sessions
+       (upload_id, account_id, filename, folder_uuid, total_chunks, received_chunks, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 0, 'receiving', ?, ?)
+       ON DUPLICATE KEY UPDATE updated_at = VALUES(updated_at)`,
+      [uploadId, req.activeAccount.id, String(filename), folder_uuid || null, total, now, now]
+    );
+    const [ownedSessions] = await db.query('SELECT account_id FROM upload_sessions WHERE upload_id = ? LIMIT 1', [uploadId]);
+    if (!ownedSessions.length || Number(ownedSessions[0].account_id) !== Number(req.activeAccount.id)) throw new Error('Upload session tidak ditemukan.');
+
+    const chunkDir = path.join(process.cwd(), 'data', 'tmp', 'uploads', uploadId);
     fs.mkdirSync(chunkDir, { recursive: true });
 
     const chunkPath = path.join(chunkDir, `part_${chunk_index}`);
     fs.renameSync(chunkFile.path, chunkPath);
 
-    const total = Number(total_chunks);
-    const index = Number(chunk_index);
-
     // Cek apakah semua chunk sudah terkumpul
-    const files = fs.readdirSync(chunkDir);
+    const files = fs.readdirSync(chunkDir).filter((name) => /^part_\d+$/.test(name));
+    await db.query(
+      `UPDATE upload_sessions SET received_chunks = ?, status = 'receiving', error_message = NULL, updated_at = ?
+       WHERE upload_id = ? AND account_id = ?`,
+      [files.length, Date.now(), uploadId, req.activeAccount.id]
+    );
     if (files.length === total) {
       // Satukan chunks
       const assembledPath = path.join(process.cwd(), 'data', 'tmp', `${Date.now()}-${filename}`);
@@ -225,6 +246,11 @@ router.post('/upload-chunk', chunkUpload.single('chunk'), async (req, res) => {
 
         await auditService.log(req, 'UPLOAD_FILE_CHUNKED', `Mengunggah berkas besar (chunked): ${filename} (${uploadedFile.size} bytes, UUID: ${uploadedFile.uuid})`);
         fs.unlinkSync(assembledPath);
+        await db.query(
+          `UPDATE upload_sessions SET status = 'completed', received_chunks = total_chunks,
+           error_message = NULL, completed_at = ?, updated_at = ? WHERE upload_id = ? AND account_id = ?`,
+          [Date.now(), Date.now(), uploadId, req.activeAccount.id]
+        );
 
         return res.json({ success: true, file: uploadedFile });
       } catch (err) {
@@ -236,7 +262,15 @@ router.post('/upload-chunk', chunkUpload.single('chunk'), async (req, res) => {
     }
   } catch (err) {
     if (chunkFile && fs.existsSync(chunkFile.path)) fs.unlinkSync(chunkFile.path).catch(() => {});
-    return res.status(500).send(err.message);
+    if (/^[A-Za-z0-9_-]{8,100}$/.test(uploadId)) {
+      await db.query(
+        `UPDATE upload_sessions SET status = 'failed', error_message = ?, updated_at = ?
+         WHERE upload_id = ? AND account_id = ?`,
+        [String(err.message || err).slice(0, 500), Date.now(), uploadId, req.activeAccount.id]
+      ).catch(() => {});
+    }
+    console.error(`[${req.id || 'no-request-id'}] Chunk upload gagal`, err);
+    return res.status(500).send('Upload chunk gagal.');
   }
 });
 
@@ -377,6 +411,60 @@ router.post('/file/:uuid/move', async (req, res) => {
   }
 });
 
+// Aksi massal dengan validasi kepemilikan ulang pada setiap item.
+router.post('/bulk', async (req, res) => {
+  const fileUuids = [...new Set([].concat(req.body.file_uuids || []).filter(Boolean))].slice(0, 200);
+  const folderUuids = [...new Set([].concat(req.body.folder_uuids || []).filter(Boolean))].slice(0, 100);
+  const action = req.body.action;
+  const back = req.body.back && /^\/drive(?:\/folder\/[a-f0-9-]+)?$/i.test(req.body.back)
+    ? req.body.back
+    : '/drive';
+
+  try {
+    let affected = 0;
+    if (action === 'verify') {
+      for (const uuid of fileUuids) {
+        const file = await fileService.getFileByUuid(uuid);
+        if (!file || Number(file.account_id) !== Number(req.activeAccount.id) || file.deleted_at) continue;
+        await jobQueue.enqueue(
+          'storage.verify',
+          { accountId: req.activeAccount.id, fileId: file.id },
+          { accountId: req.activeAccount.id }
+        );
+        affected += 1;
+      }
+    } else if (action === 'delete') {
+      for (const uuid of fileUuids) {
+        const file = await fileService.getFileByUuid(uuid);
+        if (!file || Number(file.account_id) !== Number(req.activeAccount.id) || file.deleted_at) continue;
+        await fileService.softDeleteFile(file.id);
+        affected += 1;
+      }
+      for (const uuid of folderUuids) {
+        const folder = await fileService.getFolderByUuid(uuid);
+        if (!folder || Number(folder.account_id) !== Number(req.activeAccount.id) || folder.deleted_at) continue;
+        const pending = [folder.id];
+        while (pending.length) {
+          const folderId = pending.pop();
+          await db.query('UPDATE files SET deleted_at = ? WHERE account_id = ? AND folder_id = ? AND deleted_at IS NULL', [Date.now(), req.activeAccount.id, folderId]);
+          const [children] = await db.query('SELECT id FROM folders WHERE account_id = ? AND parent_id = ? AND deleted_at IS NULL', [req.activeAccount.id, folderId]);
+          pending.push(...children.map((child) => child.id));
+          await db.query('UPDATE folders SET deleted_at = ? WHERE account_id = ? AND id = ?', [Date.now(), req.activeAccount.id, folderId]);
+        }
+        affected += 1;
+      }
+    } else {
+      return res.redirect(`${back}?error=${encodeURIComponent('Aksi massal tidak valid.')}`);
+    }
+
+    await auditService.log(req, `BULK_${action.toUpperCase()}`, `Aksi massal ${action}: ${affected} item milik akun ${req.activeAccount.id}.`);
+    return res.redirect(`${back}?notice=${encodeURIComponent(`${affected} item diproses.`)}`);
+  } catch (error) {
+    console.error(`[${req.id || 'no-request-id'}] Aksi massal gagal`, error);
+    return res.redirect(`${back}?error=${encodeURIComponent('Aksi massal gagal diproses.')}`);
+  }
+});
+
 // Verifikasi Integritas File
 router.get('/file/:uuid/verify', async (req, res) => {
   let file;
@@ -397,18 +485,17 @@ router.get('/file/:uuid/verify', async (req, res) => {
   }
 
   try {
-    const r = await storageService.verifyIntegrity(req.activeAccount, file);
-    const msg = r.expected
-      ? r.ok
-        ? `Integritas "${file.name}" OK (SHA-256 cocok).`
-        : `PERINGATAN: Checksum "${file.name}" tidak cocok!`
-      : `"${file.name}": tidak ada checksum tersimpan.`;
-    
-    await auditService.log(req, 'VERIFY_FILE', `Verifikasi integritas file "${file.name}": ${r.ok ? 'SUCCESS' : 'FAILED'} (File UUID: ${file.uuid})`);
-    const key = r.ok ? 'notice' : 'error';
-    res.redirect(`${back}${back.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(msg)}`);
+    const jobUuid = await jobQueue.enqueue(
+      'storage.verify',
+      { accountId: req.activeAccount.id, fileId: file.id },
+      { accountId: req.activeAccount.id }
+    );
+    await auditService.log(req, 'VERIFY_FILE_QUEUED', `Menjadwalkan verifikasi integritas file "${file.name}" (File UUID: ${file.uuid}, Job UUID: ${jobUuid})`);
+    const msg = `Verifikasi integritas "${file.name}" dijadwalkan. Job: ${jobUuid}`;
+    res.redirect(`${back}${back.includes('?') ? '&' : '?'}notice=${encodeURIComponent(msg)}`);
   } catch (err) {
-    res.redirect(`${back}${back.includes('?') ? '&' : '?'}error=${encodeURIComponent(err.message)}`);
+    console.error(`[${req.id || 'no-request-id'}] Gagal menjadwalkan verifikasi`, err);
+    res.redirect(`${back}${back.includes('?') ? '&' : '?'}error=${encodeURIComponent('Gagal menjadwalkan verifikasi integritas.')}`);
   }
 });
 
@@ -478,19 +565,14 @@ router.post('/file/:uuid/delete-permanent', async (req, res) => {
       throw new Error('Berkas tidak ditemukan.');
     }
     
-    // Hapus di Telegram remote (best effort)
-    try {
-      await storageService.deleteRemote(req.activeAccount, file);
-    } catch (_) {}
+    const jobUuid = await jobQueue.enqueue(
+      'storage.delete-file',
+      { accountId: req.activeAccount.id, fileId: file.id },
+      { accountId: req.activeAccount.id }
+    );
+    await auditService.log(req, 'DELETE_FILE_PERMANENT_QUEUED', `Menjadwalkan penghapusan permanen: ${file.name} (UUID: ${file.uuid}, Job UUID: ${jobUuid})`);
 
-    // Hapus shares link
-    await db.query("DELETE FROM shares WHERE item_type = 'file' AND item_id = ?", [file.id]);
-    
-    // Hapus dari database
-    await fileService.deleteFile(file.id);
-    await auditService.log(req, 'DELETE_FILE_PERMANENT', `Menghapus berkas secara permanen: ${file.name} (UUID: ${file.uuid})`);
-    
-    res.redirect('/drive/trash?notice=' + encodeURIComponent('Berkas dihapus secara permanen.'));
+    res.redirect('/drive/trash?notice=' + encodeURIComponent(`Penghapusan permanen dijadwalkan. Job: ${jobUuid}`));
   } catch (err) {
     res.redirect('/drive/trash?error=' + encodeURIComponent(err.message));
   }
@@ -501,14 +583,15 @@ router.post('/trash/empty', async (req, res) => {
   try {
     const accountId = req.activeAccount.id;
     
-    // Ambil berkas-berkas terhapus
+    // Pertahankan metadata file sampai worker berhasil menghapus konten remote.
     const files = await fileService.listTrashFiles(accountId);
+    const jobs = [];
     for (const file of files) {
-      try {
-        await storageService.deleteRemote(req.activeAccount, file);
-      } catch (_) {}
-      await db.query("DELETE FROM shares WHERE item_type = 'file' AND item_id = ?", [file.id]);
-      await fileService.deleteFile(file.id);
+      jobs.push(await jobQueue.enqueue(
+        'storage.delete-file',
+        { accountId, fileId: file.id },
+        { accountId }
+      ));
     }
 
     // Ambil folder-folder terhapus dan hapus records
@@ -518,8 +601,8 @@ router.post('/trash/empty', async (req, res) => {
       await fileService.deleteFolder(f.id);
     }
 
-    await auditService.log(req, 'EMPTY_TRASH', 'Mengosongkan tempat sampah secara permanen.');
-    res.redirect('/drive/trash?notice=' + encodeURIComponent('Tempat sampah berhasil dikosongkan.'));
+    await auditService.log(req, 'EMPTY_TRASH_QUEUED', `Menjadwalkan ${jobs.length} penghapusan file remote dan menghapus metadata folder sampah.`);
+    res.redirect('/drive/trash?notice=' + encodeURIComponent(`${jobs.length} penghapusan file dijadwalkan; folder sampah telah dibersihkan.`));
   } catch (err) {
     res.redirect('/drive/trash?error=' + encodeURIComponent(err.message));
   }

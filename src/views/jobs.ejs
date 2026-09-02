@@ -1,0 +1,9 @@
+<%- include('partials/header') %>
+<div class="page-head"><div><div class="breadcrumb">Operations / Jobs</div><h1>Background Jobs</h1><p class="hint">Antrean durable dengan retry, progress, lease recovery, dan dead-letter state.</p></div></div>
+<% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+<div class="card"><div class="table-wrap"><table><thead><tr><th>Waktu</th><th>Type</th><th>Status</th><th>Progress</th><th>Percobaan</th><th>Error</th><th>Aksi</th></tr></thead><tbody>
+<% jobs.forEach(function(job) { %><tr><td><%= formatDate(job.created_at) %></td><td><code><%= job.type %></code></td><td><span class="badge"><%= job.status %></span></td><td><%= job.progress %>%</td><td><%= job.attempts %>/<%= job.max_attempts %></td><td><%= job.last_error || '-' %></td><td><% if (job.status === 'dead' || job.status === 'failed') { %><form method="POST" action="/jobs/<%= job.uuid %>/retry"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small" type="submit">Retry</button></form><% } %></td></tr><% }); %>
+<% if (!jobs.length) { %><tr><td colspan="7" class="hint">Belum ada job.</td></tr><% } %>
+</tbody></table></div></div>
+<%- include('partials/footer') %>

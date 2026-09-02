@@ -3,9 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#f8fafc" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="TDrive" />
   <title><%= typeof title !== 'undefined' ? title : 'TDrive & TNote' %> · TDrive</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/logo.svg" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <script>
     (function () {
       try {
@@ -19,6 +24,7 @@
     })();
   </script>
   <link rel="stylesheet" href="/css/style.css" />
+  <script src="/js/pwa.js" defer></script>
 </head>
 <body>
   <header class="topbar" id="siteHeader">
@@ -31,14 +37,21 @@
       <a class="nav-link" href="/notes">TNote</a>
       <a class="nav-link" href="/kinerja">TKinerja</a>
       <a class="nav-link" href="/shortlink">TShort</a>
+      <a class="nav-link" href="/health">Health</a>
+      <a class="nav-link" href="/jobs">Jobs</a>
+      <a class="nav-link" href="/notifications">Notifikasi<% if (typeof unreadNotifications !== 'undefined' && unreadNotifications) { %> (<%= unreadNotifications %>)<% } %></a>
       <!-- <a class="nav-link" href="/workspace/shared-with-me">Workspace</a> -->
       <% if (typeof isAdmin !== 'undefined' && isAdmin) { %>
         <a class="nav-link" href="/accounts">Accounts</a>
         <a class="nav-link" href="/backup">Backup</a>
+        <a class="nav-link" href="/reconciliation">Rekonsiliasi</a>
       <% } %>
       <a class="nav-link" href="/profile">Profile</a>
     </nav>
     <div class="topbar-actions">
+      <form method="GET" action="/search" class="header-search" role="search">
+        <input type="search" name="q" minlength="2" maxlength="100" placeholder="Cari…" aria-label="Universal search">
+      </form>
       <button class="icon-btn theme-toggle" type="button" aria-label="Ganti tema" title="Ganti tema">
         <span class="theme-icon" aria-hidden="true">◐</span>
       </button>
