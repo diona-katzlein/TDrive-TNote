@@ -1,4 +1,8 @@
 #!/bin/bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+mkdir -p logs
 
 # ==============================================================================
 # Script Otomatisasi Deploy - TDrive & TNote
@@ -37,22 +41,26 @@ else
     exit 1
 fi
 
-# 3. Restart process Node.js menggunakan PM2
-echo -e "\n${KUNING}[3/3] Melakukan restart PM2 process: tdrive-app...${NC}"
-pm2 restart tdrive-app
+# 3. Start/reload menggunakan definisi ecosystem agar cwd, port, log, dan env konsisten.
+echo -e "\n${KUNING}[3/3] Reload PM2 process dari ecosystem.config.js...${NC}"
+pm2 startOrReload ecosystem.config.js --env production --update-env
+pm2 save
 
-if [ $? -eq 0 ]; then
-    echo -e "${HIJAU}✔ PM2 process 'tdrive-app' berhasil direstart!${NC}"
-else
-    echo -e "${KUNING}⚠ PM2 gagal restart langsung. Mencoba mendaftarkan & menjalankan ulang...${NC}"
-    pm2 start src/app.js --name "tdrive-app"
-    if [ $? -eq 0 ]; then
-      echo -e "${HIJAU}✔ PM2 process 'tdrive-app' berhasil didaftarkan & dijalankan!${NC}"
-    else
-      echo -e "${MERAH}❌ Gagal menjalankan PM2 process.${NC}"
-      exit 1
+ENV_PORT="$(sed -n 's/^[[:space:]]*PORT[[:space:]]*=[[:space:]]*\([0-9][0-9]*\)[[:space:]]*$/\1/p' .env 2>/dev/null | tail -n 1)"
+APP_PORT="${PORT:-${ENV_PORT:-3000}}"
+READY_URL="http://127.0.0.1:${APP_PORT}/readyz"
+for attempt in {1..20}; do
+    if curl --fail --silent --show-error --max-time 3 "$READY_URL" >/dev/null; then
+        echo -e "${HIJAU}✔ PM2 process 'tdrive-app' siap pada port ${APP_PORT}.${NC}"
+        break
     fi
-fi
+    if [ "$attempt" -eq 20 ]; then
+        echo -e "${MERAH}❌ Aplikasi tidak ready setelah 20 percobaan. Log terakhir:${NC}"
+        pm2 logs tdrive-app --lines 80 --nostream
+        exit 1
+    fi
+    sleep 1
+done
 
 echo -e "\n${HIJAU}====================================================${NC}"
 echo -e "${HIJAU}       PROSES DEPLOY BERHASIL DISELESAIKAN!         ${NC}"
