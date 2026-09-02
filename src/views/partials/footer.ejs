@@ -1,35 +1,84 @@
   </main>
-  <footer class="footer" style="text-align: center; color: var(--muted); font-size: 13px; padding: 28px; border-top: 1px solid var(--border); margin-top: 40px; display: flex; flex-direction: column; gap: 12px; align-items: center;">
-    <div>
-      TDrive and TNote · Telegram as Cloud Drive and Cloud Note. Created with <span style="color: #e5484d;">❤️</span> by <strong>Isekai.ID</strong>
+  <footer class="footer">
+    <div class="footer-copy">
+      TDrive and TNote · Telegram as Cloud Drive and Cloud Note. Created with <span class="footer-heart">❤️</span> by <strong>Isekai.ID</strong>
     </div>
-    <div style="display: flex; gap: 18px; align-items: center; justify-content: center; flex-wrap: wrap;">
-      <!-- Privacy & ToS -->
-      <a href="/privacy" style="display: flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 500;" class="footer-link">
-        <span>🔒</span> Privasi
-      </a>
-      <a href="/tos" style="display: flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 500;" class="footer-link">
-        <span>📜</span> Ketentuan
-      </a>
-      <a href="/guide" style="display: flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 500;" class="footer-link">
-        <span>📖</span> Panduan
-      </a>
-      <!-- GitHub Link -->
-      <a href="https://github.com/diona-katzlein/TDrive-TNote" target="_blank" style="display: flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 500;" class="footer-link">
-        <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle;"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    <nav class="footer-links" aria-label="Tautan footer">
+      <a href="/privacy" class="footer-link"><span aria-hidden="true">🔒</span> Privasi</a>
+      <a href="/tos" class="footer-link"><span aria-hidden="true">📜</span> Ketentuan</a>
+      <a href="/guide" class="footer-link"><span aria-hidden="true">📖</span> Panduan</a>
+      <a href="https://github.com/diona-katzlein/TDrive-TNote" target="_blank" rel="noopener noreferrer" class="footer-link">
+        <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
         GitHub Project
       </a>
-      
-      <!-- Tako Link -->
-      <a href="https://tako.id/IsekaiID/gift" target="_blank" style="display: flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 500;" class="footer-link">
-        <span>🐙</span> Tako.ID
-      </a>
-      
-      <!-- Trakteer Link -->
-      <a href="https://trakteer.id/isekai_id/gift" target="_blank" style="display: flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 500;" class="footer-link">
-        <span>☕</span> Trakteer
-      </a>
-    </div>
+      <a href="https://tako.id/IsekaiID/gift" target="_blank" rel="noopener noreferrer" class="footer-link"><span aria-hidden="true">🐙</span> Tako.ID</a>
+      <a href="https://trakteer.id/isekai_id/gift" target="_blank" rel="noopener noreferrer" class="footer-link"><span aria-hidden="true">☕</span> Trakteer</a>
+    </nav>
   </footer>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var themeMeta = document.querySelector('meta[name="theme-color"]');
+      var toggles = document.querySelectorAll('.theme-toggle');
+      var media = window.matchMedia('(prefers-color-scheme: dark)');
+
+      function currentTheme() {
+        return root.dataset.theme === 'dark' ? 'dark' : 'light';
+      }
+
+      function renderTheme(theme) {
+        root.dataset.theme = theme;
+        root.style.colorScheme = theme;
+        if (themeMeta) themeMeta.content = theme === 'dark' ? '#0b1220' : '#f8fafc';
+        toggles.forEach(function (toggle) {
+          var dark = theme === 'dark';
+          toggle.setAttribute('aria-label', dark ? 'Aktifkan tema terang' : 'Aktifkan tema gelap');
+          toggle.setAttribute('title', dark ? 'Tema terang' : 'Tema gelap');
+          var icon = toggle.querySelector('.theme-icon');
+          if (icon) icon.textContent = dark ? '☀' : '☾';
+        });
+      }
+
+      toggles.forEach(function (toggle) {
+        toggle.addEventListener('click', function () {
+          var next = currentTheme() === 'dark' ? 'light' : 'dark';
+          try { localStorage.setItem('tdriveTheme', next); } catch (_) {}
+          renderTheme(next);
+        });
+      });
+
+      media.addEventListener && media.addEventListener('change', function (event) {
+        var saved = null;
+        try { saved = localStorage.getItem('tdriveTheme'); } catch (_) {}
+        if (saved !== 'light' && saved !== 'dark') renderTheme(event.matches ? 'dark' : 'light');
+      });
+      renderTheme(currentTheme());
+
+      var header = document.getElementById('siteHeader');
+      var navToggle = document.querySelector('.nav-toggle');
+      var nav = document.getElementById('primaryNav');
+      if (header && navToggle && nav) {
+        function closeNav() {
+          header.classList.remove('nav-open');
+          navToggle.setAttribute('aria-expanded', 'false');
+          navToggle.querySelector('span').textContent = '☰';
+        }
+        navToggle.addEventListener('click', function () {
+          var open = header.classList.toggle('nav-open');
+          navToggle.setAttribute('aria-expanded', String(open));
+          navToggle.querySelector('span').textContent = open ? '×' : '☰';
+        });
+        nav.addEventListener('click', function (event) {
+          if (event.target.closest('a')) closeNav();
+        });
+        document.addEventListener('click', function (event) {
+          if (!header.contains(event.target)) closeNav();
+        });
+        window.addEventListener('resize', function () {
+          if (window.innerWidth > 760) closeNav();
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

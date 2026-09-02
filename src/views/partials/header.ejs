@@ -2,15 +2,31 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f8fafc" />
   <title><%= typeof title !== 'undefined' ? title : 'TDrive & TNote' %> · TDrive</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('tdriveTheme');
+        var theme = saved === 'light' || saved === 'dark'
+          ? saved
+          : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      } catch (_) {}
+    })();
+  </script>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/" style="display: flex; align-items: center;"><img src="/logo.svg" alt="TDrive Logo" style="height: 36px;" /></a>
-    <nav class="nav-links">
+  <header class="topbar" id="siteHeader">
+    <a class="brand" href="/" aria-label="TDrive home"><img src="/logo.svg" alt="TDrive Logo" /></a>
+    <button class="icon-btn nav-toggle" type="button" aria-label="Buka navigasi" aria-expanded="false" aria-controls="primaryNav">
+      <span aria-hidden="true">☰</span>
+    </button>
+    <nav class="nav-links" id="primaryNav" aria-label="Navigasi utama">
       <a class="nav-link" href="/drive">TDrive</a>
       <a class="nav-link" href="/notes">TNote</a>
       <a class="nav-link" href="/kinerja">TKinerja</a>
@@ -22,7 +38,11 @@
       <% } %>
       <a class="nav-link" href="/profile">Profile</a>
     </nav>
-    <div class="account-switch">
+    <div class="topbar-actions">
+      <button class="icon-btn theme-toggle" type="button" aria-label="Ganti tema" title="Ganti tema">
+        <span class="theme-icon" aria-hidden="true">◐</span>
+      </button>
+      <div class="account-switch">
       <% if (typeof accounts !== 'undefined' && accounts.length) { %>
         <form method="POST" action="" id="switchForm">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
@@ -39,6 +59,7 @@
           <a class="btn small" href="/accounts/add">+ Add Account</a>
         <% } %>
       <% } %>
+      </div>
     </div>
   </header>
   <main class="container">
