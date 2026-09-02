@@ -46,8 +46,9 @@ echo -e "\n${KUNING}[3/3] Reload PM2 process dari ecosystem.config.js...${NC}"
 pm2 startOrReload ecosystem.config.js --env production --update-env
 pm2 save
 
-ENV_PORT="$(sed -n 's/^[[:space:]]*PORT[[:space:]]*=[[:space:]]*\([0-9][0-9]*\)[[:space:]]*$/\1/p' .env 2>/dev/null | tail -n 1)"
-APP_PORT="${PORT:-${ENV_PORT:-3000}}"
+# Keep this synchronized with ecosystem.config.js. Do not prefer the deployment
+# shell's PORT because PM2/shell sessions may retain a stale PORT=3000 value.
+APP_PORT=3101
 READY_URL="http://127.0.0.1:${APP_PORT}/readyz"
 for attempt in {1..20}; do
     if curl --fail --silent --show-error --max-time 3 "$READY_URL" >/dev/null; then

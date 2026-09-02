@@ -13,6 +13,8 @@ module.exports = {
       },
       env_production: {
         NODE_ENV: 'production',
+        // Pin the production listener so a stale PM2 daemon/shell PORT cannot override .env.
+        PORT: 3101,
       },
       // Kustomisasi logging PM2
       error_file: 'logs/pm2-error.log',
