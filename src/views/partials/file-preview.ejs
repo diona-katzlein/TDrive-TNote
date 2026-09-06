@@ -1,10 +1,24 @@
+<style>
+  #tdrivePreview::backdrop { background:rgba(8,15,28,.78); backdrop-filter:blur(4px); }
+  .preview-status { padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
+  .preview-status[data-state="loading"] { border-left:4px solid var(--accent); }
+  .preview-status[data-state="ready"] { border-left:4px solid var(--ok); }
+  .preview-status[data-state="error"] { border-left:4px solid var(--danger); background:rgba(220,53,69,.08); }
+  .preview-error-card { display:grid; place-items:center; min-height:260px; padding:28px; text-align:center; border:1px dashed var(--border); border-radius:12px; background:var(--panel-2); }
+  .preview-error-card strong { display:block; margin:10px 0 6px; font-size:18px; }
+  .preview-error-icon { font-size:42px; }
+  .preview-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+</style>
 <dialog id="tdrivePreview" style="width:90vw;max-width:1000px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:12px;">
   <form method="dialog"><button class="btn small" autofocus>Tutup pratinjau</button></form>
   <h3 id="tdrivePreviewTitle"></h3>
   <p id="tdrivePreviewCaption" style="white-space:pre-wrap;overflow-wrap:anywhere;"></p>
-  <p id="tdrivePreviewStatus" role="status"></p>
-  <p class="hint">Dokumen Office dikonversi ke PDF. Jika konversi gagal, pemutar PDF tidak tersedia, atau codec media tidak didukung, unduh berkas asli.</p>
-  <a id="tdrivePreviewDownload" class="btn small">Unduh berkas asli</a>
+  <p id="tdrivePreviewStatus" class="preview-status" data-state="loading" role="status"></p>
+  <p class="hint">Dokumen Office dikonversi secara lokal ke PDF. Berkas tidak dikirim ke layanan viewer pihak ketiga.</p>
+  <div class="preview-actions">
+    <a id="tdrivePreviewDownload" class="btn small">Unduh berkas asli</a>
+    <a class="btn small ghost" href="/guide#office-preview">Panduan konfigurasi Office Preview</a>
+  </div>
   <div id="tdrivePreviewBody" style="margin-top:12px;"></div>
 </dialog>
 <script src="/js/file-preview.js" defer></script>

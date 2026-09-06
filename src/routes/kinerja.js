@@ -343,8 +343,10 @@ router.post('/', parseEvidenceUpload, async (req, res) => {
 router.get('/:uuid/edit', async (req, res) => {
   const report = await getOwnedReport(req.params.uuid, req.activeAccount.id);
   if (!report) return res.status(404).send('Laporan tidak ditemukan.');
+  const activityDate = String(report.activity_date).slice(0, 10);
   res.render('kinerja/form', {
     title: 'Edit Laporan TKinerja', report, error: req.query.error || null, notice: req.query.notice || null,
+    returnUrl: /^\d{4}-\d{2}-\d{2}$/.test(activityDate) ? `/kinerja/date/${activityDate}` : '/kinerja',
     maxImageMb: MAX_IMAGE_MB, maxEvidenceFiles: MAX_EVIDENCE_FILES, csrfToken: res.locals.csrfToken,
   });
 });

@@ -80,6 +80,25 @@
     text-transform: uppercase;
     color: var(--text);
   }
+  .guide-code {
+    display: block;
+    margin: 10px 0;
+    padding: 12px 14px;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #101827;
+    color: #d9e7ff;
+    font: 12px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace;
+    white-space: pre;
+  }
+  .guide-warning {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-left: 4px solid #f59e0b;
+    border-radius: 8px;
+    background: rgba(245,158,11,.09);
+  }
 </style>
 
 <div class="guide-page">
@@ -156,9 +175,37 @@
     </ul>
   </div>
 
+  <div class="guide-card" id="office-preview">
+    <h2>🧰 5. Mengaktifkan Preview Word, Excel, dan PowerPoint</h2>
+    <p>Pesan <strong>“Local Office preview conversion is not configured”</strong> berarti administrator server belum mengaktifkan konverter Office lokal. PDF, gambar, video, dan audio tidak memerlukan konfigurasi ini.</p>
+    <p><strong>Untuk administrator server Linux dengan Docker:</strong></p>
+    <ol>
+      <li>Pastikan Docker tersedia. Untuk produksi, gunakan Docker rootless atau worker konversi khusus agar dokumen tidak memperoleh akses ke host.</li>
+      <li>Dari root aplikasi, bangun image konverter:</li>
+    </ol>
+    <code class="guide-code">docker build -t tdrive-preview-office:local -f src/services/preview/Dockerfile .</code>
+    <ol start="3">
+      <li>Pasang wrapper bawaan sebagai file executable yang hanya dapat diubah administrator:</li>
+    </ol>
+    <code class="guide-code">sudo install -d -m 755 /opt/tdrive-preview
+sudo install -o root -g root -m 755 src/services/preview/convert-office.sh /opt/tdrive-preview/convert-office</code>
+    <ol start="4">
+      <li>Tambahkan lokasi wrapper ke environment aplikasi:</li>
+    </ol>
+    <code class="guide-code">TDRIVE_PREVIEW_CONVERTER=/opt/tdrive-preview/convert-office</code>
+    <p>Jika memakai PM2, tambahkan variabel tersebut ke <code>env</code> pada <code>ecosystem.config.js</code> atau file environment layanan, lalu jalankan:</p>
+    <code class="guide-code">pm2 restart ecosystem.config.js --update-env</code>
+    <ol start="5">
+      <li>Buka TDrive, pilih berkas DOC/DOCX, XLS/XLSX, atau PPT/PPTX, lalu klik <strong>Pratinjau</strong>. Konversi pertama dapat memerlukan waktu hingga dua menit.</li>
+    </ol>
+    <div class="guide-warning"><strong>Penting:</strong> jangan arahkan variabel langsung ke binary LibreOffice tanpa sandbox. Wrapper bawaan menonaktifkan jaringan, membatasi CPU/memori/proses, dan menghapus file sementara. Aplikasi harus memiliki izin memakai Docker. Keanggotaan pada grup Docker rootful setara akses tinggi ke host.</div>
+    <p><strong>Windows:</strong> preview PDF/media tetap berfungsi, tetapi wrapper Linux bawaan tidak dapat dijalankan langsung. Jalankan aplikasi produksi di Linux, WSL2/Docker dengan wrapper ekuivalen, atau sediakan executable administrator yang melakukan konversi dalam VM/container terisolasi. Jangan menggunakan command string atau konverter cloud karena dokumen bersifat privat.</p>
+    <p>Jika masih gagal, periksa Docker daemon, izin eksekusi wrapper, ruang pada direktori temporary, batas dokumen 32 MiB, dan log aplikasi. Berkas rusak, terenkripsi, atau diproteksi sandi tidak dapat dikonversi; gunakan tombol <strong>Unduh berkas asli</strong>.</p>
+  </div>
+
   <!-- Keamanan 2FA -->
   <div class="guide-card">
-    <h2>🔒 5. Mengaktifkan Autentikasi Dua Faktor (MFA / 2FA)</h2>
+    <h2>🔒 6. Mengaktifkan Autentikasi Dua Faktor (MFA / 2FA)</h2>
     <p>Untuk mengamankan akun Anda dari akses pihak lain:</p>
     <ol>
       <li>Buka menu <strong>Profil</strong> Anda.</li>

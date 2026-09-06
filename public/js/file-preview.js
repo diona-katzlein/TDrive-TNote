@@ -15,6 +15,34 @@
     if (blobUrl) URL.revokeObjectURL(blobUrl);
     blobUrl = null;
   }
+  function setStatus(message, state) {
+    status.textContent = message;
+    status.dataset.state = state;
+  }
+  function showError(message, needsSetup) {
+    const card = document.createElement('div');
+    card.className = 'preview-error-card';
+    const content = document.createElement('div');
+    const icon = document.createElement('div');
+    icon.className = 'preview-error-icon';
+    icon.textContent = needsSetup ? '🧰' : '⚠️';
+    const title = document.createElement('strong');
+    title.textContent = needsSetup ? 'Office Preview belum dikonfigurasi' : 'Pratinjau belum tersedia';
+    const detail = document.createElement('p');
+    detail.className = 'hint';
+    detail.textContent = message;
+    content.append(icon, title, detail);
+    if (needsSetup) {
+      const guide = document.createElement('a');
+      guide.className = 'btn small ghost';
+      guide.href = '/guide#office-preview';
+      guide.textContent = 'Buka panduan konfigurasi';
+      content.appendChild(guide);
+    }
+    card.appendChild(content);
+    body.replaceChildren(card);
+    setStatus(message, 'error');
+  }
   dialog.addEventListener('close', cleanup);
   document.addEventListener('click', async event => {
     const button = event.target.closest('[data-file-preview]');
@@ -27,7 +55,7 @@
     const url = new URL(button.dataset.filePreview, location.origin);
     if (url.origin !== location.origin) return;
     document.getElementById('tdrivePreviewDownload').href = url.pathname.replace(/\/preview$/, '/download');
-    status.textContent = 'Memuat pratinjau… Konversi Office dapat memerlukan waktu hingga dua menit.';
+    setStatus('Memuat pratinjau… Konversi Office dapat memerlukan waktu hingga dua menit.', 'loading');
     if (!dialog.open) dialog.showModal();
     try {
       // Probe native media with one byte; fetch documents once to avoid repeated conversion.
@@ -35,8 +63,14 @@
       const response = await fetch(url, { headers: mediaName ? { Range: 'bytes=0-0' } : {}, signal: controller.signal });
       const mime = (response.headers.get('Content-Type') || '').split(';')[0];
       if (!response.ok || !/^(application\/pdf|image\/(png|jpeg|gif|webp)|audio\/|video\/)/.test(mime)) {
-        if (response.body) await response.body.cancel();
-        throw new Error('Pratinjau tidak tersedia. Konverter mungkin belum dikonfigurasi, berkas rusak/terproteksi, terlalu besar, atau akses telah berakhir.');
+        const serverMessage = response.body ? (await response.text()).trim() : '';
+        const needsSetup = response.status === 503 && /not configured/i.test(serverMessage);
+        const message = needsSetup
+          ? 'Server belum memiliki konverter LibreOffice lokal. Administrator perlu mengikuti panduan konfigurasi; berkas asli tetap dapat diunduh.'
+          : 'Berkas tidak dapat dipratinjau. Berkas mungkin rusak, terproteksi sandi, terlalu besar, layanan sedang sibuk, atau akses telah berakhir.';
+        const previewError = new Error(message);
+        previewError.needsSetup = needsSetup;
+        throw previewError;
       }
       let element;
       if (mime === 'application/pdf') {
@@ -57,11 +91,13 @@
         element.style.maxHeight = '65vh';
       }
       element.style.width = '100%';
-      element.addEventListener('error', () => { status.textContent = 'Media tidak dapat dimuat atau codec tidak didukung. Silakan unduh berkas asli.'; });
+      element.addEventListener('error', () => showError('Media tidak dapat dimuat atau codec tidak didukung browser. Silakan unduh berkas asli.', false));
       body.replaceChildren(element);
-      status.textContent = 'Pratinjau siap. Berkas asli tetap tersedia melalui tombol unduh.';
+      setStatus('Pratinjau siap. Berkas asli tetap tersedia melalui tombol unduh.', 'ready');
     } catch (error) {
-      if (current === generation && error.name !== 'AbortError') status.textContent = error.message || 'Pratinjau gagal. Silakan unduh berkas asli.';
+      if (current === generation && error.name !== 'AbortError') {
+        showError(error.message || 'Pratinjau gagal. Silakan unduh berkas asli.', Boolean(error.needsSetup));
+      }
     }
   });
 })();
