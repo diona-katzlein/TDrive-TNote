@@ -34,7 +34,16 @@
     <% if (report.evidence && report.evidence.length) { %>
       <div class="evidence"><h3>Bukti Dukung (<%= report.evidence.length %>)</h3><div class="evidence-grid">
         <% report.evidence.forEach(function(item, index) { %>
-          <figure><a href="/share/<%= uuid %>/kinerja-evidence/<%= item.evidence_id %>" target="_blank"><img src="/share/<%= uuid %>/kinerja-evidence/<%= item.evidence_id %>" alt="Bukti dukung <%= index + 1 %> - <%= report.title %>"></a><figcaption>Bukti <%= index + 1 %></figcaption></figure>
+          <figure>
+            <a href="/share/<%= uuid %>/kinerja-evidence/<%= item.evidence_id %>?preview=1" target="_blank" rel="noopener">
+              <% if ((item.mime || '').startsWith('image/')) { %>
+                <img src="/share/<%= uuid %>/kinerja-evidence/<%= item.evidence_id %>" alt="Bukti dukung <%= index + 1 %> - <%= item.name %>">
+              <% } else { %>
+                <span style="display:block;padding:30px 12px;border:1px solid var(--border);border-radius:10px;">📄 Pratinjau dokumen</span>
+              <% } %>
+            </a>
+            <figcaption>Bukti <%= index + 1 %> · <%= item.name %></figcaption>
+          </figure>
         <% }); %>
       </div></div>
     <% } %>

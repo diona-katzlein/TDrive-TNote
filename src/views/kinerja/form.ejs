@@ -29,12 +29,12 @@
     <label>Isi kegiatan (opsional)<textarea name="description" placeholder="Tuliskan ringkasan, hasil, atau detail kegiatan..."><%= report && report.description ? report.description : '' %></textarea></label>
 
     <div>
-      <label>Bukti gambar (opsional, maksimum <%= maxEvidenceFiles %> file × <%= maxImageMb %> MB)</label>
-      <div id="evidenceDrop" class="evidence-drop" tabindex="0" data-max-files="<%= maxEvidenceFiles %>" data-max-mb="<%= maxImageMb %>">
-        <strong>📷 Pilih banyak gambar atau paste screenshot di sini</strong>
-        <p class="hint">Gunakan Ctrl+V berulang kali untuk menambahkan beberapa hasil screenshot.</p>
-        <button class="btn ghost" type="button" onclick="document.getElementById('evidence').click()">Pilih Gambar</button>
-        <input id="evidence" type="file" name="evidence" accept="image/*" multiple hidden>
+      <label>Bukti dukung (opsional, maksimum <%= maxEvidenceFiles %> berkas × <%= maxImageMb %> MB)</label>
+      <div id="evidenceDrop" class="evidence-drop" tabindex="0" data-max-files="<%= maxEvidenceFiles %>" data-existing="<%= report && report.evidence ? report.evidence.length : 0 %>" data-max-mb="<%= maxImageMb %>">
+        <strong>📎 Pilih atau seret gambar dan dokumen ke sini</strong>
+        <p class="hint">Gambar, PDF, Excel (.xls, .xlsx), PowerPoint (.ppt, .pptx), Word (.doc, .docx). Ctrl+V untuk menambahkan screenshot. Pratinjau dokumen tersedia setelah disimpan.</p>
+        <button class="btn ghost" type="button" onclick="document.getElementById('evidence').click()">Pilih Berkas</button>
+        <input id="evidence" type="file" name="evidence" accept="image/*,.pdf,.xls,.xlsx,.ppt,.pptx,.doc,.docx" multiple hidden>
       </div>
       <div id="pendingEvidence" class="evidence-grid"></div>
       <p id="evidenceStatus" class="hint">Belum ada bukti baru dipilih.</p>
@@ -45,7 +45,9 @@
         <div class="evidence-grid">
           <% report.evidence.forEach(function(item) { %>
             <div class="evidence-item">
-              <a href="/kinerja/<%= report.uuid %>/evidence/<%= item.evidence_id %>" target="_blank"><img src="/kinerja/<%= report.uuid %>/evidence/<%= item.evidence_id %>" alt="<%= item.name %>"></a>
+              <a href="/kinerja/<%= report.uuid %>/evidence/<%= item.evidence_id %>?preview=1" target="_blank" rel="noopener">
+                <% if ((item.mime || '').startsWith('image/')) { %><img src="/kinerja/<%= report.uuid %>/evidence/<%= item.evidence_id %>" alt="<%= item.name %>"><% } else { %><span style="display:block;padding:35px 8px;text-align:center;">📄 Pratinjau dokumen</span><% } %>
+              </a>
               <small title="<%= item.name %>"><%= item.name %></small>
               <button class="btn small danger evidence-remove" type="submit" formnovalidate
                 formaction="/kinerja/<%= report.uuid %>/evidence/<%= item.evidence_id %>/delete?_csrf=<%= encodeURIComponent(csrfToken) %>"
@@ -69,8 +71,20 @@
   function updateFolder(){var p=date.value.split('-');if(p.length===3){document.getElementById('monthName').textContent=months[Number(p[1])-1];document.getElementById('dateFolder').textContent=p[2]+'-'+p[1]+'-'+p[0];}}
   function signature(file){return [file.name,file.size,file.lastModified].join(':');}
   function sync(){var transfer=new DataTransfer();files.forEach(function(file){transfer.items.add(file);});input.files=transfer.files;render();}
-  function render(){grid.innerHTML='';files.forEach(function(file,index){var card=document.createElement('div');card.className='evidence-item';var img=document.createElement('img'),url=URL.createObjectURL(file);img.src=url;img.onload=function(){URL.revokeObjectURL(url);};var name=document.createElement('small');name.textContent=file.name;name.title=file.name;var remove=document.createElement('button');remove.type='button';remove.className='btn small danger evidence-remove';remove.textContent='Hapus';remove.onclick=function(){files.splice(index,1);sync();};card.append(img,name,remove);grid.appendChild(card);});status.textContent=files.length?files.length+' bukti baru siap diunggah. Klik Hapus jika belum sesuai.':'Belum ada bukti baru dipilih.';}
-  function add(incoming){var errors=[];Array.from(incoming||[]).forEach(function(file){if(!file.type.startsWith('image/'))errors.push(file.name+' bukan gambar.');else if(file.size>maxBytes)errors.push(file.name+' melebihi batas ukuran.');else if(files.length>=maxFiles)errors.push('Maksimum '+maxFiles+' gambar.');else if(!files.some(function(current){return signature(current)===signature(file);}))files.push(file);});sync();if(errors.length)alert(errors.join('\n'));}
+  var previewUrls=[];
+  function render(){
+    previewUrls.forEach(function(url){URL.revokeObjectURL(url);});previewUrls=[];grid.innerHTML='';
+    files.forEach(function(file,index){
+      var card=document.createElement('div');card.className='evidence-item';
+      if(file.type.startsWith('image/')){var img=document.createElement('img'),url=URL.createObjectURL(file);previewUrls.push(url);img.src=url;img.alt=file.name;card.appendChild(img);}
+      else {var documentLabel=document.createElement('div');documentLabel.textContent='📄 '+file.name.split('.').pop().toUpperCase();documentLabel.style.padding='35px 8px';card.appendChild(documentLabel);}
+      var name=document.createElement('small');name.textContent=file.name;name.title=file.name;
+      var remove=document.createElement('button');remove.type='button';remove.className='btn small danger evidence-remove';remove.textContent='Hapus';remove.onclick=function(){files.splice(index,1);sync();};card.append(name,remove);grid.appendChild(card);
+    });
+    status.textContent=files.length?files.length+' bukti baru siap diunggah. Klik Hapus jika belum sesuai.':'Belum ada bukti baru dipilih.';
+  }
+  function add(incoming){var errors=[];Array.from(incoming||[]).forEach(function(file){if(!file.type.startsWith('image/')&&!/\.(pdf|xlsx?|pptx?|docx?)$/i.test(file.name))errors.push(file.name+' bukan jenis bukti yang didukung.');else if(file.size>maxBytes)errors.push(file.name+' melebihi batas ukuran.');else if(files.some(function(current){return signature(current)===signature(file);}))return;else if(files.length+Number(drop.dataset.existing)>=maxFiles)errors.push('Maksimum '+maxFiles+' berkas termasuk bukti tersimpan.');else files.push(file);});sync();if(errors.length)alert(errors.join('\n'));}
+  window.addEventListener('pagehide',function(){previewUrls.forEach(function(url){URL.revokeObjectURL(url);});});
   input.addEventListener('change',function(){add(this.files);});
   document.addEventListener('paste',function(event){var pasted=Array.from(event.clipboardData&&event.clipboardData.files||[]).filter(function(file){return file.type.startsWith('image/');});if(pasted.length){event.preventDefault();pasted.forEach(function(file,index){if(!file.name||file.name==='image.png')Object.defineProperty(file,'name',{value:'Screenshot-'+Date.now()+'-'+(index+1)+'.png'});});add(pasted);}});
   ['dragenter','dragover'].forEach(function(type){drop.addEventListener(type,function(event){event.preventDefault();drop.classList.add('active');});});

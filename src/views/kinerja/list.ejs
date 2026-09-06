@@ -48,8 +48,9 @@
   <a class="btn" href="/kinerja/new">+ Buat Laporan</a>
 </div>
 
-<% if (error) { %><div class="alert error"><%= error %></div><% } %>
-<% if (notice) { %><div class="alert info"><%= notice %></div><% } %>
+<div id="kinerjaFeedback" class="alert info" role="status" aria-live="polite" hidden></div>
+<% if (error) { %><div class="alert error" role="alert"><%= error %></div><% } %>
+<% if (notice) { %><div class="alert info" role="status"><%= notice %></div><% } else if (createdShareUuid) { %><div class="alert info" role="status">Tautan berbagi laporan berhasil disiapkan.</div><% } %>
 <% if (createdPassword) { %>
   <div class="alert info">
     <strong>Password share baru:</strong>
@@ -102,7 +103,7 @@
     <% dates.forEach(function(d) { var parts = d.date_key.split('-'); %>
       <a class="folder-card" href="/kinerja/date/<%= d.date_key %>">
         <span class="folder-title">📁 <%= parts[2] %>-<%= parts[1] %>-<%= parts[0] %></span>
-        <span class="hint"><%= d.report_count %> laporan · <%= d.evidence_count %> bukti gambar</span>
+        <span class="hint"><%= d.report_count %> laporan · <%= d.evidence_count %> berkas bukti</span>
       </a>
     <% }); %>
   </div>
@@ -118,19 +119,19 @@
           <tr>
             <td><strong><%= r.title %></strong><% if (r.description) { %><div class="hint"><%= r.description.length > 110 ? r.description.slice(0, 110) + '…' : r.description %></div><% } %></td>
             <td><%= String(r.start_time).slice(0,5) %>–<%= String(r.end_time).slice(0,5) %></td>
-            <td><% if (r.evidence_uuid) { %><a href="/kinerja/<%= r.uuid %>/evidence" target="_blank"><img class="kinerja-thumb" src="/kinerja/<%= r.uuid %>/evidence" alt="Bukti <%= r.title %>"></a><div class="hint"><%= r.evidence_count %> gambar</div><% } else { %><span class="hint">Tanpa gambar</span><% } %></td>
+            <td><% if (r.evidence_uuid) { %><a href="/kinerja/<%= r.uuid %>/evidence?preview=1" target="_blank" rel="noopener"><% if ((r.evidence_mime || '').startsWith('image/')) { %><img class="kinerja-thumb" src="/kinerja/<%= r.uuid %>/evidence" alt="Bukti <%= r.title %>"><% } else { %>📄 Pratinjau dokumen<% } %></a><div class="hint"><%= r.evidence_count %> berkas bukti</div><a href="/kinerja/<%= r.uuid %>/edit">Lihat semua bukti</a><% } else { %><span class="hint">Tanpa bukti</span><% } %></td>
             <td>
               <div class="kinerja-actions">
                 <a class="btn small ghost" href="/kinerja/<%= r.uuid %>/edit">Edit</a>
                 <% if (!r.share_uuid) { %><button class="btn small ghost" type="button" data-uuid="<%= r.uuid %>" data-title="<%= r.title %>" onclick="openShare(this.dataset.uuid,this.dataset.title)">🔗 Share</button><% } %>
-                <form method="POST" action="/kinerja/<%= r.uuid %>/delete" onsubmit="return confirm('Hapus laporan dan bukti gambarnya?');"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small danger">Hapus</button></form>
+                <form method="POST" action="/kinerja/<%= r.uuid %>/delete" onsubmit="return confirm('Hapus laporan dan semua berkas buktinya?');"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small danger">Hapus</button></form>
               </div>
               <% if (r.share_uuid) { %>
                 <div class="share-box">
                   <small style="color:var(--ok);">● Share aktif dan dilindungi password</small>
-                  <input readonly value="<%= domain %>/s/<%= r.short_code %>" onclick="this.select()">
+                  <input readonly aria-label="Tautan berbagi laporan" value="<%= domain + (r.short_code ? '/s/' + r.short_code : '/share/' + r.share_uuid) %>" onclick="this.select()">
                   <div class="kinerja-actions">
-                    <button class="btn small" type="button" data-url="<%= domain %>/s/<%= r.short_code %>" onclick="copyText(this.dataset.url)">Salin TShort</button>
+                    <button class="btn small" type="button" data-url="<%= domain + (r.short_code ? '/s/' + r.short_code : '/share/' + r.share_uuid) %>" onclick="copyText(this.dataset.url)">Salin Tautan</button>
                     <button class="btn small ghost" type="button" data-uuid="<%= r.share_uuid %>" data-title="<%= r.title %>" onclick="openPassword(this.dataset.uuid,this.dataset.title)">Ganti Password</button>
                     <form method="POST" action="/share/<%= r.share_uuid %>/revoke"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="redirect" value="/kinerja/date/<%= selectedDate.key %>"><button class="btn small danger">Cabut</button></form>
                   </div>
@@ -178,7 +179,17 @@ function setRandomPassword(id){document.getElementById(id).value=randomPassword(
 function openShare(uuid,name){document.getElementById('shareUuid').value=uuid;document.getElementById('shareName').textContent=name;setRandomPassword('sharePassword');document.getElementById('shareModal').style.display='flex';}
 function openPassword(uuid,name){document.getElementById('passwordName').textContent=name;document.getElementById('passwordForm').action='/share/'+encodeURIComponent(uuid)+'/password';setRandomPassword('newPassword');document.getElementById('passwordModal').style.display='flex';}
 function closeModal(id){document.getElementById(id).style.display='none';}
-function copyText(value){navigator.clipboard.writeText(value);}
+function showKinerjaFeedback(message,failed){var feedback=document.getElementById('kinerjaFeedback');feedback.textContent=message;feedback.className='alert '+(failed?'error':'info');feedback.hidden=false;feedback.scrollIntoView({block:'nearest'});}
+async function copyText(value){
+  try {
+    if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(value);}
+    else {
+      var field=document.createElement('textarea');field.value=value;field.style.position='fixed';field.style.opacity='0';document.body.appendChild(field);field.select();
+      try{if(!document.execCommand('copy'))throw new Error('Clipboard unavailable');}finally{field.remove();}
+    }
+    showKinerjaFeedback('Berhasil disalin ke papan klip.',false);
+  }catch(error){showKinerjaFeedback('Gagal menyalin. Pilih teks tautan atau password, lalu salin secara manual.',true);}
+}
 function setDisplay(mode){
   if(!['grid','list','compact'].includes(mode))mode='grid';
   document.querySelectorAll('.display-target').forEach(function(el){el.classList.remove('display-grid','display-list','display-compact');el.classList.add('display-'+mode);});

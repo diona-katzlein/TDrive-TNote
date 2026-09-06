@@ -15,7 +15,16 @@ const { requireActiveAccount } = require('../middleware/activeAccount');
 
 const router = express.Router();
 const TMP_DIR = path.join(process.cwd(), 'data', 'tmp', 'kinerja');
-const MAX_IMAGE_MB = Number(process.env.TKINERJA_MAX_IMAGE_MB) || 20;
+const MAX_IMAGE_MB = Number(process.env.TKINERJA_MAX_FILE_MB) || Number(process.env.TKINERJA_MAX_IMAGE_MB) || 20;
+const DOCUMENT_MIMES = {
+  '.pdf': 'application/pdf',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
 const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const MAX_EVIDENCE_FILES = Number(process.env.TKINERJA_MAX_EVIDENCE_FILES) || 20;
 
@@ -31,8 +40,12 @@ const upload = multer({
   }),
   limits: { fileSize: MAX_IMAGE_MB * 1024 * 1024 },
   fileFilter(req, file, cb) {
-    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
-      return cb(new Error('Bukti dukung hanya boleh berupa gambar.'));
+    const documentMime = DOCUMENT_MIMES[path.extname(file.originalname).toLowerCase()];
+    if (documentMime) {
+      // Browsers may send generic MIME types for Office files; store a canonical type.
+      file.mimetype = documentMime;
+    } else if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+      return cb(new Error('Bukti dukung harus berupa gambar, PDF, Excel (.xls, .xlsx), PowerPoint (.ppt, .pptx), atau Word (.doc, .docx).'));
     }
     cb(null, true);
   },
@@ -47,8 +60,8 @@ function parseEvidenceUpload(req, res, next) {
     const message = err.code === 'LIMIT_FILE_SIZE'
       ? `Salah satu bukti melebihi batas ${MAX_IMAGE_MB} MB.`
       : (err.code === 'LIMIT_UNEXPECTED_FILE'
-        ? `Maksimum ${MAX_EVIDENCE_FILES} bukti gambar per laporan.`
-        : (err.message || 'Gagal memproses bukti gambar.'));
+        ? `Maksimum ${MAX_EVIDENCE_FILES} berkas bukti per laporan.`
+        : (err.message || 'Gagal memproses berkas bukti.'));
     const target = req.params && req.params.uuid ? `/kinerja/${req.params.uuid}/edit` : '/kinerja/new';
     return redirectWith(res, target, 'error', message);
   });
@@ -263,6 +276,8 @@ router.get('/date/:date', async (req, res) => {
       `SELECT k.*, DATE_FORMAT(k.activity_date, '%Y-%m-%d') AS activity_date,
               (SELECT f.uuid FROM kinerja_evidence ke INNER JOIN files f ON f.id = ke.file_id
                WHERE ke.report_id = k.id ORDER BY ke.sort_order, ke.id LIMIT 1) AS evidence_uuid,
+              (SELECT f.mime FROM kinerja_evidence ke INNER JOIN files f ON f.id = ke.file_id
+               WHERE ke.report_id = k.id ORDER BY ke.sort_order, ke.id LIMIT 1) AS evidence_mime,
               (SELECT COUNT(*) FROM kinerja_evidence ke WHERE ke.report_id = k.id) AS evidence_count,
               s.uuid AS share_uuid, sl.short_code
        FROM kinerja_reports k
@@ -340,12 +355,11 @@ router.post('/:uuid', parseEvidenceUpload, async (req, res) => {
     report = await getOwnedReport(req.params.uuid, req.activeAccount.id);
     if (!report) throw new Error('Laporan tidak ditemukan.');
     const input = validateInput(req.body);
+    if (report.evidence.length + (req.files || []).length > MAX_EVIDENCE_FILES) {
+      throw new Error(`Maksimum ${MAX_EVIDENCE_FILES} berkas bukti per laporan.`);
+    }
     const folder = await ensureDateFolder(req.activeAccount.id, input.activityDate);
     const evidence = await uploadEvidenceFiles(req, folder.id);
-    if (report.evidence.length + evidence.length > MAX_EVIDENCE_FILES) {
-      for (const file of evidence) await deleteEvidenceFile(req.activeAccount, file.id);
-      throw new Error(`Maksimum ${MAX_EVIDENCE_FILES} bukti gambar per laporan.`);
-    }
     await db.query(
       `UPDATE kinerja_reports SET folder_id = ?, activity_date = ?, title = ?,
        start_time = ?, end_time = ?, description = ?, updated_at = ? WHERE id = ?`,
@@ -384,6 +398,13 @@ router.get('/:uuid/evidence/:evidenceId?', async (req, res) => {
       : report.evidence[0]);
     if (!evidence) return res.status(404).send('Bukti tidak ditemukan.');
     const file = await fileService.getFile(evidence.file_id);
+    if (!file || String(file.account_id) !== String(req.activeAccount.id) || file.deleted_at) {
+      return res.status(404).send('Bukti tidak ditemukan.');
+    }
+    if (req.query.preview === '1') {
+      return await require('../services/previewService').sendPreview(req, res, file, req.activeAccount);
+    }
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Type', file.mime || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
     await storageService.downloadToStream(req.activeAccount, file, res);
