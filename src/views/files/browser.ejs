@@ -123,6 +123,35 @@
   .hp-field {
     display: none !important;
   }
+  .drive-breadcrumb {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    min-width: 0;
+  }
+  .drive-breadcrumb a,
+  .drive-breadcrumb span {
+    overflow-wrap: anywhere;
+  }
+  .drive-breadcrumb .separator {
+    color: var(--muted);
+    user-select: none;
+  }
+  .folder-location {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 760px) {
+    .page-head { align-items: stretch; }
+    .page-head .search { width: 100%; }
+    .page-head .search input { flex: 1; min-width: 0; }
+    .grid { min-width: 760px; }
+    .grid-wrap { overflow-x: auto; border-radius: 12px; }
+  }
 </style>
 
 <!-- Donation Banner -->
@@ -137,10 +166,17 @@
 </div>
 
 <div class="page-head">
-  <div class="breadcrumb">
+  <nav class="breadcrumb drive-breadcrumb" aria-label="Lokasi folder">
     <a href="/drive">Drive</a>
-    <% if (currentFolder) { %> / <span><%= currentFolder.name %></span><% } %>
-  </div>
+    <% breadcrumbs.forEach(function(folder, index) { %>
+      <span class="separator" aria-hidden="true">/</span>
+      <% if (index < breadcrumbs.length - 1) { %>
+        <a href="/drive/folder/<%= folder.uuid %>"><%= folder.name %></a>
+      <% } else { %>
+        <span aria-current="page"><%= folder.name %></span>
+      <% } %>
+    <% }); %>
+  </nav>
   <form method="GET" action="/drive" class="search">
     <input type="text" name="q" value="<%= query %>" placeholder="Cari file..." />
     <button class="btn small ghost">Cari</button>
@@ -211,6 +247,7 @@
   <button class="btn small" type="submit">Terapkan</button>
 </form>
 
+<div class="grid-wrap">
 <table class="grid">
   <thead>
     <tr><th aria-label="Pilih"></th><th>Nama</th><th>Ukuran</th><th>Tipe</th><th>Tanggal</th><th>Aksi</th></tr>
@@ -219,7 +256,7 @@
     <% if (currentFolder) { %>
       <tr>
         <td colspan="6">
-          <a class="row-link" href="<%= currentFolder.parent_id ? '/drive/folder/' + allFolders.find(f => f.id === currentFolder.parent_id).uuid : '/drive' %>">⬅ .. (folder induk)</a>
+          <a class="row-link" href="<%= parentFolder ? '/drive/folder/' + parentFolder.uuid : '/drive' %>">⬅ .. (folder induk)</a>
         </td>
       </tr>
     <% } %>
@@ -228,7 +265,10 @@
     <% folders.forEach(function(f){ %>
       <tr>
         <td><input class="bulk-item" form="bulkForm" type="checkbox" name="folder_uuids" value="<%= f.uuid %>" aria-label="Pilih folder <%= f.name %>" /></td>
-        <td><a class="row-link folder" href="/drive/folder/<%= f.uuid %>">📁 <%= f.name %></a></td>
+        <td>
+          <a class="row-link folder" href="/drive/folder/<%= f.uuid %>">📁 <%= f.name %></a>
+          <% if (currentFolder) { %><span class="folder-location">Drive / <%= breadcrumbs.map(function(folder) { return folder.name; }).concat([f.name]).join(' / ') %></span><% } %>
+        </td>
         <td>—</td>
         <td>Folder</td>
         <td><%= formatDate(f.created_at) %></td>
@@ -292,7 +332,7 @@
             <select name="folder_uuid" onchange="this.form.submit()" title="Pindahkan ke folder">
               <option value="" <%= !file.folder_id ? 'selected' : '' %>>— (root)</option>
               <% allFolders.forEach(function(af){ %>
-                <option value="<%= af.uuid %>" <%= file.folder_id === af.id ? 'selected' : '' %>><%= af.name %></option>
+                <option value="<%= af.uuid %>" <%= file.folder_id === af.id ? 'selected' : '' %>><%= af.path %></option>
               <% }); %>
             </select>
           </form>
@@ -310,6 +350,7 @@
     <% } %>
   </tbody>
 </table>
+</div>
 
 <script>
   document.getElementById('selectAllItems')?.addEventListener('change', function () {
@@ -330,14 +371,11 @@
       <h3 id="shareTitle">Bagikan Item</h3>
       <button class="modal-close" onclick="closeShareModal()">&times;</button>
     </div>
-    <form method="POST" action="/share/create" class="form">
+    <form method="POST" action="/share/create" class="form" autocomplete="off">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <input type="hidden" name="redirect" id="shareRedirect" />
       <input type="hidden" name="item_type" id="shareItemType" />
       <input type="hidden" name="item_uuid" id="shareItemUuid" />
-
-      <!-- Honeypot -->
-      <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
 
       <p class="hint" style="margin-top: 0;">Membagikan: <strong id="shareItemName" style="color: var(--text);">Item</strong></p>
 

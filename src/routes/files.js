@@ -78,12 +78,17 @@ async function renderBrowser(req, res, folderUuid = null) {
       [accountId]
     );
 
+    const allFolders = await fileService.listAllFolders(accountId);
+    const folderNavigation = fileService.buildFolderNavigation(allFolders, currentFolder);
+
     res.render('files/browser', {
       title: currentFolder ? currentFolder.name : 'Drive',
       folders,
       files,
       currentFolder,
-      allFolders: await fileService.listAllFolders(accountId),
+      breadcrumbs: folderNavigation.breadcrumbs,
+      parentFolder: folderNavigation.parentFolder,
+      allFolders: folderNavigation.folders,
       stats: await fileService.accountStats(accountId),
       sharesMap,
       channels,

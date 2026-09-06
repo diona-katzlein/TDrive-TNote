@@ -120,6 +120,45 @@ async function listAllFolders(accountId) {
   return rows;
 }
 
+function buildFolderNavigation(folders, currentFolder) {
+  const byId = new Map(folders.map((folder) => [Number(folder.id), folder]));
+  const breadcrumbs = [];
+  const visited = new Set();
+  let cursor = currentFolder;
+
+  while (cursor) {
+    const id = Number(cursor.id);
+    if (!Number.isFinite(id) || visited.has(id)) break;
+    visited.add(id);
+    breadcrumbs.unshift(cursor);
+    cursor = cursor.parent_id == null ? null : byId.get(Number(cursor.parent_id));
+  }
+
+  function folderPath(folder) {
+    const names = [];
+    const pathVisited = new Set();
+    let node = folder;
+    while (node) {
+      const id = Number(node.id);
+      if (!Number.isFinite(id) || pathVisited.has(id)) break;
+      pathVisited.add(id);
+      names.unshift(node.name);
+      node = node.parent_id == null ? null : byId.get(Number(node.parent_id));
+    }
+    return names.join(' / ');
+  }
+
+  return {
+    breadcrumbs,
+    parentFolder: currentFolder && currentFolder.parent_id != null
+      ? byId.get(Number(currentFolder.parent_id)) || null
+      : null,
+    folders: folders
+      .map((folder) => ({ ...folder, path: folderPath(folder) }))
+      .sort((a, b) => a.path.localeCompare(b.path)),
+  };
+}
+
 async function renameFolder(id, newName) {
   return db.query('UPDATE folders SET name = ? WHERE id = ?', [newName, id]);
 }
@@ -322,6 +361,7 @@ module.exports = {
   getFolder,
   getFolderByUuid,
   listAllFolders,
+  buildFolderNavigation,
   renameFolder,
   deleteFolder,
   // files

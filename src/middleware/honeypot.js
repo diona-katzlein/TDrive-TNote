@@ -7,6 +7,10 @@
  */
 function honeypot(fieldName = 'website') {
   return (req, res, next) => {
+    // Modal share dilindungi login, CSRF, rate limit, dan validasi kepemilikan.
+    // Abaikan field umum ini karena password manager dapat mengisinya otomatis.
+    if (req.method === 'POST' && req.path === '/share/create') return next();
+
     // Hanya cek form method POST/PUT/PATCH
     if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
       if (req.body && req.body[fieldName] && String(req.body[fieldName]).trim().length > 0) {
@@ -19,3 +23,4 @@ function honeypot(fieldName = 'website') {
 }
 
 module.exports = honeypot();
+module.exports.create = honeypot;
