@@ -90,6 +90,8 @@ function securityHeaders(req, res, next) {
     "default-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
+    "frame-src 'self' blob:",
+    "media-src 'self'",
     "frame-ancestors 'none'",
     "form-action 'self'",
     "img-src 'self' data: blob: https://api.qrserver.com",

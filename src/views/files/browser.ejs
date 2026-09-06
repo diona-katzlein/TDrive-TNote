@@ -159,6 +159,9 @@
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <input type="hidden" name="folder_uuid" value="<%= currentFolder ? currentFolder.uuid : '' %>" />
       <input type="file" name="files" id="fileInput" multiple accept="*/*" required />
+      <label>Keterangan (opsional, berlaku untuk semua berkas)
+        <textarea name="caption" maxlength="2000" rows="2" placeholder="Keterangan berkas, maksimal 2000 karakter"></textarea>
+      </label>
       
       <select name="storage_peer" title="Target Penyimpanan Telegram" style="font-size: 12px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer;">
         <option value="me" <%= (activeAccount && activeAccount.storage_peer === 'me') ? 'selected' : '' %>>📥 Saved Messages (me)</option>
@@ -252,24 +255,23 @@
     <% files.forEach(function(file){ %>
       <tr>
         <td><input class="bulk-item" form="bulkForm" type="checkbox" name="file_uuids" value="<%= file.uuid %>" aria-label="Pilih file <%= file.name %>" /></td>
-        <td>📄 <%= file.name %><% if (file.is_chunked) { %> <span class="tag">chunked</span><% } %></td>
+        <td>📄 <%= file.name %><% if (file.is_chunked) { %> <span class="tag">chunked</span><% } %>
+          <p style="white-space:pre-wrap;overflow-wrap:anywhere;"><%= file.caption || '' %></p>
+          <details><summary>Ubah keterangan</summary>
+            <form method="POST" action="/drive/file/<%= file.uuid %>/caption">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <label>Keterangan<textarea name="caption" maxlength="2000" rows="3"><%= file.caption || '' %></textarea></label>
+              <button class="btn small" type="submit">Simpan keterangan</button>
+            </form>
+          </details>
+        </td>
         <td><%= formatSize(file.size) %></td>
         <td><%= file.mime || '-' %></td>
         <td><%= formatDate(file.created_at) %></td>
         <td class="actions">
           <a class="btn small ghost" href="/drive/file/<%= file.uuid %>/download">Unduh</a>
           
-          <% 
-            var isPreviewable = file.mime && (
-              file.mime.startsWith('image/') || 
-              file.mime.startsWith('video/') || 
-              file.mime.startsWith('audio/') || 
-              file.mime === 'application/pdf'
-            );
-          %>
-          <% if (isPreviewable) { %>
-            <button type="button" class="btn small ghost" onclick="openPreviewModal('<%= file.uuid %>', '<%= file.name.replace(/'/g, "\\'") %>', '<%= file.mime %>')">Preview</button>
-          <% } %>
+          <button type="button" class="btn small ghost" data-file-preview="/drive/file/<%= file.uuid %>/preview" data-name="<%= file.name %>" data-caption="<%= file.caption || '' %>">Pratinjau</button>
 
           <!-- Share Button -->
           <% if (sharesMap.file[file.id]) { %>
@@ -443,18 +445,6 @@
 <!-- ---------------------------------------------------- -->
 <!-- MODAL: MEDIA PREVIEW (IN-BROWSER STREAMING) -->
 <!-- ---------------------------------------------------- -->
-<div id="previewModal" class="modal-overlay">
-  <div class="modal-card" style="max-width: 800px; width: 95%; background: var(--panel);">
-    <div class="modal-header">
-      <h3 id="previewTitle">Pratinjau Media</h3>
-      <button class="modal-close" onclick="closePreviewModal()">&times;</button>
-    </div>
-    <div id="previewContent" style="display: flex; align-items: center; justify-content: center; min-height: 200px; background: #000; border-radius: 8px; overflow: hidden; padding: 10px;">
-      <!-- Konten disuntikkan via JS -->
-    </div>
-  </div>
-</div>
-
 <!-- ---------------------------------------------------- -->
 <!-- MODAL: KELOLA WORKSPACE KOLABORASI -->
 <!-- ---------------------------------------------------- -->
@@ -741,6 +731,14 @@
     var csrfToken = this.querySelector('input[name="_csrf"]').value;
     var folderUuid = this.querySelector('input[name="folder_uuid"]').value;
 
+    var captionVal = this.querySelector('[name="caption"]').value;
+    // Prevent silently dropping remaining files in the legacy single-file chunk flow.
+    if (fileInput.files.length > 1 && Array.from(fileInput.files).some(f => f.size > 50 * 1024 * 1024)) {
+      overlay.style.display = 'none';
+      alert('Untuk berkas lebih dari 50 MB, unggah satu berkas setiap kali agar semua berkas tersimpan.');
+      return;
+    }
+
     // Ukuran chunk (50MB agar aman di bawah limit Cloudflare 100MB)
     var CHUNK_SIZE = 50 * 1024 * 1024;
     
@@ -809,6 +807,7 @@
         chunkFormData.append('filename', file.name);
         chunkFormData.append('folder_uuid', folderUuid);
         chunkFormData.append('storage_peer', storagePeerVal);
+        chunkFormData.append('caption', captionVal);
         chunkFormData.append('_csrf', csrfToken);
 
         var xhr = new XMLHttpRequest();
@@ -886,40 +885,6 @@
     return n.toFixed(1) + ' ' + units[i];
   }
 
-  // --- LOGIKA MEDIA PREVIEW ---
-  function openPreviewModal(uuid, name, mime) {
-    document.getElementById('previewTitle').innerText = name;
-    var contentDiv = document.getElementById('previewContent');
-    contentDiv.innerHTML = '<p style="color: #fff; font-size: 13px;">Menghubungkan ke Telegram DC dan memutar media stream. Harap tunggu...</p>';
-    document.getElementById('previewModal').style.display = 'flex';
-
-    var src = '/drive/file/' + uuid + '/preview';
-    var html = '';
-
-    if (mime.startsWith('image/')) {
-      html = '<img src="' + src + '" style="max-width: 100%; max-height: 70vh; object-fit: contain;" />';
-    } else if (mime.startsWith('video/')) {
-      html = '<video controls autoplay style="width: 100%; max-height: 70vh;"><source src="' + src + '" type="' + mime + '">Browser Anda tidak mendukung video HTML5.</video>';
-    } else if (mime.startsWith('audio/')) {
-      html = '<audio controls autoplay style="width: 100%;"><source src="' + src + '" type="' + mime + '">Browser Anda tidak mendukung audio HTML5.</audio>';
-    } else if (mime === 'application/pdf') {
-      html = '<iframe src="' + src + '" style="width: 100%; height: 70vh; border: none; background: #fff;"></iframe>';
-    } else {
-      html = '<p style="color: #fff;">Tipe file tidak didukung untuk pratinjau langsung.</p>';
-    }
-
-    // Set time-out tipis agar rendering transisi modal mulus
-    setTimeout(function() {
-      contentDiv.innerHTML = html;
-    }, 100);
-  }
-
-  function closePreviewModal() {
-    var contentDiv = document.getElementById('previewContent');
-    contentDiv.innerHTML = ''; // Hentikan playback video/audio dengan mengosongkan source
-    document.getElementById('previewModal').style.display = 'none';
-  }
-
   // --- LOGIKA WORKSPACE MODAL ---
   function openWorkspaceModal(type, uuid, name) {
     document.getElementById('workspaceItemType').value = type;
@@ -934,4 +899,5 @@
   }
 </script>
 
+<%- include('../partials/file-preview') %>
 <%- include('../partials/footer') %>

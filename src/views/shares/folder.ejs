@@ -44,12 +44,13 @@
     <!-- Files List -->
     <% files.forEach(function(file){ %>
       <tr>
-        <td>📄 <%= file.name %></td>
+        <td>📄 <%= file.name %><p style="white-space:pre-wrap;overflow-wrap:anywhere;"><%= file.caption || '' %></p></td>
         <td><%= formatSize(file.size) %></td>
         <td><%= file.mime || '-' %></td>
         <td><%= formatDate(file.created_at) %></td>
         <td class="actions">
           <a class="btn small" href="/share/<%= uuid %>/file/<%= file.uuid %>/download">Unduh</a>
+          <button type="button" class="btn small ghost" data-file-preview="/share/<%= uuid %>/file/<%= file.uuid %>/preview" data-name="<%= file.name %>" data-caption="<%= file.caption || '' %>">Pratinjau</button>
         </td>
       </tr>
     <% }); %>
@@ -60,4 +61,5 @@
   </tbody>
 </table>
 
+<%- include('../partials/file-preview') %>
 <%- include('../partials/footer') %>

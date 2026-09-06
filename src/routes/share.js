@@ -477,6 +477,9 @@ router.get('/:uuid/kinerja-evidence/:evidenceId?', async (req, res) => {
     const file = await fileService.getFile(evidence.file_id);
     const account = await fileService.getAccount(evidence.account_id);
     if (!file || !account) return res.status(404).send('Bukti tidak tersedia.');
+    if (req.query.preview === '1') {
+      return await require('../services/previewService').sendPreview(req, res, file, account);
+    }
     res.setHeader('Content-Type', file.mime || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
     await storageService.downloadToStream(account, file, res);
@@ -540,14 +543,8 @@ router.get('/:uuid/preview', async (req, res) => {
     const account = await fileService.getAccount(file.account_id);
     if (!account) return res.status(404).send('Akun storage sudah tidak valid.');
 
-    res.setHeader('Content-Type', file.mime || 'application/octet-stream');
-    res.setHeader('Content-Length', file.size);
-    res.setHeader('Accept-Ranges', 'none');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
-
     await auditService.log(req, 'PREVIEW_SHARE_FILE', `Pratinjau berkas publik: ${file.name} (Share: ${uuid})`);
-    await storageService.downloadToStream(account, file, res);
-    res.end();
+    return await require('../services/previewService').sendPreview(req, res, file, account);
   } catch (err) {
     if (!res.headersSent) {
       res.status(500).send('Gagal pratinjau: ' + err.message);
@@ -578,30 +575,11 @@ router.get('/:uuid/docx-preview', async (req, res) => {
     const account = await fileService.getAccount(file.account_id);
     if (!account) return res.status(404).send('Akun storage sudah tidak valid.');
 
-    // Download file ke memori buffer secara streaming
-    const chunks = [];
-    const stream = new (require('stream').Writable)({
-      write(chunk, encoding, next) {
-        chunks.push(chunk);
-        next();
-      }
-    });
-
-    await storageService.downloadToStream(account, file, stream);
-    const fileBuffer = Buffer.concat(chunks);
-
-    const mammoth = require('mammoth');
-    const result = await mammoth.convertToHtml({ buffer: fileBuffer });
-    
-    // Kirim HTML bersih
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(`
-      <div class="docx-preview-body" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; padding: 20px; background: #fff; border-radius: 4px; overflow-y: auto; max-height: 70vh;">
-        ${result.value}
-      </div>
-    `);
+    // Legacy URL now uses the same bounded local PDF conversion as all previews.
+    return await require('../services/previewService').sendPreview(req, res, file, account);
   } catch (err) {
-    res.status(500).send('<p style="color: red; padding: 20px;">Gagal memproses pratinjau Word: ' + err.message + '</p>');
+    if (!res.headersSent) res.status(500).type('text/plain').send('Word preview unavailable.');
+    else res.destroy();
   }
 });
 
@@ -669,7 +647,7 @@ router.get('/:share_uuid/folder/:folder_uuid', async (req, res) => {
 });
 
 // Download File Publik di dalam Shared Folder
-router.get('/:share_uuid/file/:file_uuid/download', async (req, res) => {
+router.get(['/:share_uuid/file/:file_uuid/download', '/:share_uuid/file/:file_uuid/preview'], async (req, res) => {
   const { share_uuid, file_uuid } = req.params;
   try {
     const [shares] = await db.query('SELECT * FROM shares WHERE uuid = ?', [share_uuid]);
@@ -708,6 +686,9 @@ router.get('/:share_uuid/file/:file_uuid/download', async (req, res) => {
     const account = await fileService.getAccount(file.account_id);
     if (!account) return res.status(404).send('Akun storage tidak valid.');
 
+    if (req.path.endsWith('/preview') || req.query.preview === '1') {
+      return await require('../services/previewService').sendPreview(req, res, file, account);
+    }
     res.setHeader('Content-Type', file.mime || 'application/octet-stream');
     res.setHeader('Content-Length', file.size);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);

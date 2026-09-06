@@ -107,6 +107,7 @@ router.post('/upload', upload.array('files'), async (req, res) => {
   
   try {
     if (files.length === 0) throw new Error('Tidak ada file yang dipilih.');
+    const caption = fileService.normalizeCaption(req.body.caption);
     
     let folderId = null;
     if (folderUuid) {
@@ -125,6 +126,7 @@ router.post('/upload', upload.array('files'), async (req, res) => {
 
         const uploadedFile = await storageService.uploadFile(req.activeAccount, {
           tempPath,
+          caption,
           filename: file.originalname,
           mime: file.mimetype,
           size: file.size,
@@ -173,16 +175,21 @@ router.post('/upload-chunk', chunkUpload.single('chunk'), async (req, res) => {
     if (!Number.isInteger(index) || index < 0 || index >= total) throw new Error('Index chunk tidak valid.');
     if (!filename || String(filename).length > 255) throw new Error('Nama file tidak valid.');
 
+    const caption = fileService.normalizeCaption(req.body.caption);
     const now = Date.now();
     await db.query(
       `INSERT INTO upload_sessions
-       (upload_id, account_id, filename, folder_uuid, total_chunks, received_chunks, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 0, 'receiving', ?, ?)
+       (upload_id, account_id, filename, folder_uuid, total_chunks, received_chunks, status, created_at, updated_at, caption)
+       VALUES (?, ?, ?, ?, ?, 0, 'receiving', ?, ?, ?)
        ON DUPLICATE KEY UPDATE updated_at = VALUES(updated_at)`,
-      [uploadId, req.activeAccount.id, String(filename), folder_uuid || null, total, now, now]
+      [uploadId, req.activeAccount.id, String(filename), folder_uuid || null, total, now, now, caption]
     );
-    const [ownedSessions] = await db.query('SELECT account_id FROM upload_sessions WHERE upload_id = ? LIMIT 1', [uploadId]);
+    const [ownedSessions] = await db.query('SELECT * FROM upload_sessions WHERE upload_id = ? LIMIT 1', [uploadId]);
     if (!ownedSessions.length || Number(ownedSessions[0].account_id) !== Number(req.activeAccount.id)) throw new Error('Upload session tidak ditemukan.');
+    const session = ownedSessions[0];
+    if (session.filename !== filename || Number(session.total_chunks) !== total ||
+        (session.folder_uuid || '') !== (folder_uuid || '') || (session.caption || '') !== caption ||
+        session.status === 'completed') throw new Error('Metadata sesi unggahan tidak sesuai.');
 
     const chunkDir = path.join(process.cwd(), 'data', 'tmp', 'uploads', uploadId);
     fs.mkdirSync(chunkDir, { recursive: true });
@@ -232,6 +239,7 @@ router.post('/upload-chunk', chunkUpload.single('chunk'), async (req, res) => {
         const uploadedFile = await storageService.uploadFile(req.activeAccount, {
           tempPath: assembledPath,
           filename,
+          caption: session.caption || '',
           mime: 'application/octet-stream',
           size: fs.statSync(assembledPath).size,
           folderId,
@@ -261,7 +269,7 @@ router.post('/upload-chunk', chunkUpload.single('chunk'), async (req, res) => {
       return res.json({ success: true, message: `Chunk ${index + 1}/${total} diterima.` });
     }
   } catch (err) {
-    if (chunkFile && fs.existsSync(chunkFile.path)) fs.unlinkSync(chunkFile.path).catch(() => {});
+    if (chunkFile) await fs.promises.unlink(chunkFile.path).catch(() => {});
     if (/^[A-Za-z0-9_-]{8,100}$/.test(uploadId)) {
       await db.query(
         `UPDATE upload_sessions SET status = 'failed', error_message = ?, updated_at = ?
@@ -306,20 +314,31 @@ router.get('/file/:uuid/preview', async (req, res) => {
       return res.status(404).send('File tidak ditemukan.');
     }
 
-    res.setHeader('Content-Type', file.mime || 'application/octet-stream');
-    res.setHeader('Content-Length', file.size);
-    res.setHeader('Accept-Ranges', 'none');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
-    
     await auditService.log(req, 'PREVIEW_FILE', `Melakukan preview berkas media: ${file.name} (UUID: ${file.uuid})`);
-    await storageService.downloadToStream(req.activeAccount, file, res);
-    res.end();
+    return await require('../services/previewService').sendPreview(req, res, file, req.activeAccount);
   } catch (err) {
     if (!res.headersSent) {
       res.status(500).send('Preview gagal: ' + err.message);
     } else {
       res.destroy(err);
     }
+  }
+});
+
+// Keterangan hanya dapat diperbarui oleh pemilik berkas aktif.
+router.post('/file/:uuid/caption', async (req, res) => {
+  try {
+    const file = await fileService.getFileByUuid(req.params.uuid);
+    if (!file || Number(file.account_id) !== Number(req.activeAccount.id) || file.deleted_at) {
+      return res.status(404).send('Berkas tidak ditemukan.');
+    }
+    const caption = fileService.normalizeCaption(req.body.caption);
+    await fileService.updateFileCaption(file.id, req.activeAccount.id, caption);
+    await auditService.log(req, 'UPDATE_FILE_CAPTION', `Memperbarui keterangan berkas ${file.uuid}`);
+    const folder = file.folder_id ? await fileService.getFolder(file.folder_id) : null;
+    return res.redirect(folder ? `/drive/folder/${folder.uuid}` : '/drive');
+  } catch (err) {
+    return res.status(400).send('Gagal menyimpan keterangan. Pastikan teks maksimal 2000 karakter.');
   }
 });
 

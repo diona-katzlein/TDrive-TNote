@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS folders (
 
 -- Metadata file
 CREATE TABLE IF NOT EXISTS files (
+  caption       TEXT DEFAULT NULL,
   id            INT AUTO_INCREMENT PRIMARY KEY,
   account_id    INT NOT NULL,
   folder_id     INT DEFAULT NULL,
@@ -284,6 +285,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_phone ON notifications(user_phone, 
 
 -- Track browser chunk uploads so abandoned/incomplete uploads are observable and repairable.
 CREATE TABLE IF NOT EXISTS upload_sessions (
+  caption       TEXT DEFAULT NULL,
   id              BIGINT AUTO_INCREMENT PRIMARY KEY,
   upload_id       VARCHAR(100) NOT NULL UNIQUE,
   account_id      INT NOT NULL,

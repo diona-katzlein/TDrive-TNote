@@ -99,7 +99,8 @@ function writeSlice(srcPath, start, end, destPath) {
  * @param {object} account
  * @param {object} opts { tempPath, filename, mime, size, folderId, storagePeer }
  */
-async function uploadFile(account, { tempPath, filename, mime, size, folderId, storagePeer }) {
+async function uploadFile(account, { tempPath, filename, mime, size, folderId, storagePeer, caption }) {
+  caption = fileService.normalizeCaption(caption);
   const client = await telegramManager.getClient(account);
   const peerStr = storagePeer || account.storage_peer || 'me';
   const peer = resolvePeer(account, peerStr);
@@ -168,6 +169,7 @@ async function uploadFile(account, { tempPath, filename, mime, size, folderId, s
       accountId: account.id,
       folderId: folderId || null,
       name: filename,
+      caption,
       size: actualSize,
       mime: mime || 'application/octet-stream',
       sha256,

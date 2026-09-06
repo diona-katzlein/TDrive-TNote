@@ -108,6 +108,9 @@ async function init() {
     await ensureUuidColumn('files');
     await ensureUuidColumn('notes');
 
+    await ensureColumn('files', 'caption', 'ALTER TABLE files ADD COLUMN caption TEXT DEFAULT NULL');
+    await ensureColumn('upload_sessions', 'caption', 'ALTER TABLE upload_sessions ADD COLUMN caption TEXT DEFAULT NULL');
+
     // Jalankan migrasi kolom-kolom baru untuk Recycle Bin, File Versioning, dan MFA
     await ensureColumn('folders', 'deleted_at', 'ALTER TABLE folders ADD COLUMN deleted_at BIGINT DEFAULT NULL');
     await ensureColumn('files', 'deleted_at', 'ALTER TABLE files ADD COLUMN deleted_at BIGINT DEFAULT NULL');

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS folders (
 
 -- Metadata file
 CREATE TABLE IF NOT EXISTS files (
+  caption       TEXT DEFAULT NULL,
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   account_id    INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   folder_id     INTEGER REFERENCES folders(id) ON DELETE SET NULL,

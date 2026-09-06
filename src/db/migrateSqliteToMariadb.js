@@ -78,8 +78,8 @@ async function migrate() {
     const files = sqliteDb.prepare('SELECT * FROM files').all();
     for (const fil of files) {
       await connection.query(
-        `INSERT INTO files (id, account_id, folder_id, name, size, mime, sha256, is_chunked, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO files (id, account_id, folder_id, name, size, mime, sha256, is_chunked, created_at, updated_at, caption)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE name=VALUES(name), folder_id=VALUES(folder_id)`,
         [
           fil.id,
@@ -92,6 +92,7 @@ async function migrate() {
           fil.is_chunked,
           fil.created_at,
           fil.updated_at,
+          fil.caption || null,
         ]
       );
     }

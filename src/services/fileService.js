@@ -1,5 +1,6 @@
 'use strict';
 
+
 const crypto = require('crypto');
 const db = require('../db');
 const { encrypt } = require('./cryptoService');
@@ -134,15 +135,29 @@ async function deleteFolder(id) {
  * @param {object} meta { accountId, folderId, name, size, mime, sha256, isChunked }
  * @param {Array}  chunks [{ partIndex, messageId, peer, size }]
  */
+function normalizeCaption(value) {
+  if (value == null) return '';
+  if (typeof value !== 'string' || value.length > 2000) {
+    throw new Error('Keterangan harus berupa teks maksimal 2000 karakter.');
+  }
+  return value.replace(/\r\n?/g, '\n').trim();
+}
+
+async function updateFileCaption(id, accountId, caption) {
+  return db.query('UPDATE files SET caption = ?, updated_at = ? WHERE id = ? AND account_id = ? AND deleted_at IS NULL',
+    [normalizeCaption(caption), now(), id, accountId]);
+}
+
 async function createFileWithChunks(meta, chunks) {
+  const caption = normalizeCaption(meta.caption);
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
     const ts = now();
     const u = crypto.randomUUID();
     const [fileResult] = await conn.query(
-      `INSERT INTO files (account_id, folder_id, name, size, mime, sha256, is_chunked, uuid, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO files (account_id, folder_id, name, size, mime, sha256, is_chunked, uuid, created_at, updated_at, caption)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         meta.accountId,
         meta.folderId || null,
@@ -153,7 +168,8 @@ async function createFileWithChunks(meta, chunks) {
         meta.isChunked ? 1 : 0,
         u,
         ts,
-        ts
+        ts,
+        caption
       ]
     );
     const fileId = fileResult.insertId;
@@ -287,6 +303,8 @@ async function findActiveFileByName(accountId, folderId, name) {
 }
 
 module.exports = {
+  normalizeCaption,
+  updateFileCaption,
   // accounts
   createAccount,
   getAccount,
